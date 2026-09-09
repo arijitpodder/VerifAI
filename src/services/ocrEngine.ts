@@ -218,28 +218,36 @@ export function parseDocumentText(rawText: string): ExtractedFields {
         const countryCode = match[1].replace(/</g, '');
         if (countryCode) issuingCountry = countryCode;
 
-        const namePart = match[2];
-        const nameTokens = namePart.split('<<');
-        if (nameTokens.length >= 2) {
-          const surname = nameTokens[0].replace(/</g, ' ').replace(/[LKCE<]{4,}$/gi, '').trim();
-          const given = nameTokens[1].replace(/</g, ' ').replace(/[LKCE<]{4,}$/gi, '').trim();
-          fullName = `${given} ${surname}`;
-        } else if (nameTokens[0]) {
-          fullName = nameTokens[0].replace(/</g, ' ').replace(/[LKCE<]{4,}$/gi, '').trim();
+        if (!fullName) { // ONLY use MRZ name if VIZ failed
+          const namePart = match[2];
+          const nameTokens = namePart.split('<<');
+          const cleanToken = (t: string) => t.replace(/</g, ' ').replace(/[CLIKE\s]+$/i, '').trim();
+
+          if (nameTokens.length >= 2) {
+            const surname = cleanToken(nameTokens[0]);
+            const given = cleanToken(nameTokens[1]);
+            fullName = `${given} ${surname}`;
+          } else if (nameTokens[0]) {
+            fullName = cleanToken(nameTokens[0]);
+          }
         }
       } else {
         // Fallback old parse
         const countryCode = mrzLine1.substring(2, 5).replace(/</g, '');
         if (countryCode) issuingCountry = countryCode;
 
-        const namePart = mrzLine1.substring(5);
-        const nameTokens = namePart.split('<<');
-        if (nameTokens.length >= 2) {
-          const surname = nameTokens[0].replace(/</g, ' ').replace(/[LKCE<]{4,}$/gi, '').trim();
-          const given = nameTokens[1].replace(/</g, ' ').replace(/[LKCE<]{4,}$/gi, '').trim();
-          fullName = `${given} ${surname}`;
-        } else if (nameTokens[0]) {
-          fullName = nameTokens[0].replace(/</g, ' ').replace(/[LKCE<]{4,}$/gi, '').trim();
+        if (!fullName) {
+          const namePart = mrzLine1.substring(5);
+          const nameTokens = namePart.split('<<');
+          const cleanToken = (t: string) => t.replace(/</g, ' ').replace(/[CLIKE\s]+$/i, '').trim();
+
+          if (nameTokens.length >= 2) {
+            const surname = cleanToken(nameTokens[0]);
+            const given = cleanToken(nameTokens[1]);
+            fullName = `${given} ${surname}`;
+          } else if (nameTokens[0]) {
+            fullName = cleanToken(nameTokens[0]);
+          }
         }
       }
     }
@@ -289,33 +297,30 @@ export function parseDocumentText(rawText: string): ExtractedFields {
       return clean.length >= 4 && words.length >= 1 && hasVowels && !isBlacklisted(clean);
     };
 
-    // Name detection
-    if (!fullName) {
-      // Look for explicit Passport VIZ fields: Surname and Given Names (on same or next lines)
-      const extractField = (pattern: RegExp) => {
-        for (let j = 0; j < lines.length; j++) {
-          const l = lines[j];
-          const m = l.match(pattern);
-          if (m && m[1] && isValidName(m[1])) return cleanCandidateName(m[1]);
-          if (pattern.test(l) && lines[j+1] && isValidName(lines[j+1])) return cleanCandidateName(lines[j+1]);
-        }
-        return null;
-      };
+    // Name detection - Prioritize VIZ (Visual Inspection Zone) over MRZ to avoid chevron noise (e.g. KOUSTAVCLI)
+    const extractField = (pattern: RegExp) => {
+      for (let j = 0; j < lines.length; j++) {
+        const l = lines[j];
+        const m = l.match(pattern);
+        if (m && m[1] && isValidName(m[1])) return cleanCandidateName(m[1]);
+        if (pattern.test(l) && lines[j+1] && isValidName(lines[j+1])) return cleanCandidateName(lines[j+1]);
+      }
+      return null;
+    };
 
-      const surnamePart = extractField(/^(?:surname|nom|उपनाम)\s*[:.\s-]*\s*([A-Za-z\s,.-]{3,40})/i);
-      const givenPart = extractField(/^(?:given\s*names?|pr[ée]noms?|दिया\s*गया\s*नाम)\s*[:.\s-]*\s*([A-Za-z\s,.-]{3,40})/i);
-      
-      if (surnamePart && givenPart) {
-        fullName = `${givenPart} ${surnamePart}`;
-      } else {
-        const nameMatch = line.match(/(?:full\s*name|given\s*names?|student\s*name|candidate\s*name|cardholder(?:\s*name)?|surname|nom|name)\s*[:.\s-]+\s*([A-Za-z\s,.-]{3,40})/i);
+    const surnamePart = extractField(/^(?:surname|nom|उपनाम|last\s*name)\s*[:.\s-]*\s*([A-Za-z\s,.-]{3,40})/i);
+    const givenPart = extractField(/^(?:given\s*names?|pr[ée]noms?|दिया\s*गया\s*नाम|first\s*name)\s*[:.\s-]*\s*([A-Za-z\s,.-]{3,40})/i);
+    
+    if (surnamePart && givenPart) {
+      fullName = `${givenPart} ${surnamePart}`;
+    } else {
+      const nameMatch = line.match(/(?:full\s*name|given\s*names?|student\s*name|candidate\s*name|cardholder(?:\s*name)?|surname|nom|name)\s*[:.\s-]+\s*([A-Za-z\s,.-]{3,40})/i);
 
-        if (nameMatch && nameMatch[1] && isValidName(nameMatch[1])) {
-          fullName = cleanCandidateName(nameMatch[1]);
-        } else if (/^(?:full\s*name|surname|given\s*names?|student\s*name|candidate\s*name|cardholder(?:\s*name)?|name|nom)\.?$/i.test(line)) {
-          if (isValidName(nextLine)) {
-            fullName = cleanCandidateName(nextLine);
-          }
+      if (nameMatch && nameMatch[1] && isValidName(nameMatch[1])) {
+        fullName = cleanCandidateName(nameMatch[1]);
+      } else if (/^(?:full\s*name|surname|given\s*names?|student\s*name|candidate\s*name|cardholder(?:\s*name)?|name|nom)\.?$/i.test(line)) {
+        if (isValidName(nextLine)) {
+          fullName = cleanCandidateName(nextLine);
         }
       }
     }

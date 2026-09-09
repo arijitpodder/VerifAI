@@ -308,7 +308,7 @@ function scanCardForPortraitZone(
   }
 
   // If a distinct human face cluster was found on the card
-  if (bestScore >= 20) {
+  if (bestScore >= 10) {
     const percentX = Math.round((bestX / sampleW) * 100);
     const percentY = Math.round((bestY / sampleH) * 100);
     const percentW = Math.round((bestW / sampleW) * 100);
