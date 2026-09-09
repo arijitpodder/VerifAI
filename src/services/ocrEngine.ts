@@ -202,24 +202,45 @@ export function parseDocumentText(rawText: string): ExtractedFields {
     const clean = l.replace(/[^A-Z0-9<]/gi, '');
     return clean.length >= 28 && clean.includes('<');
   });
-  if (mrzLines.length >= 2) {
+  if (mrzLines.length >= 1) {
     mrzLine1 = mrzLines[0].replace(/[^A-Z0-9<]/g, '');
-    mrzLine2 = mrzLines[1].replace(/[^A-Z0-9<]/g, '');
+    if (mrzLines.length >= 2) {
+      mrzLine2 = mrzLines[1].replace(/[^A-Z0-9<]/g, '');
+    }
 
-    // Parse MRZ line 1 (Format: P<USACONNOR<<SARAH<JEAN...)
-    if (mrzLine1.startsWith('P<') || mrzLine1.startsWith('I<')) {
-      if (mrzLine1.startsWith('P<')) documentType = 'PASSPORT';
-      const countryCode = mrzLine1.substring(2, 5).replace(/</g, '');
-      if (countryCode) issuingCountry = countryCode;
+    // Parse MRZ line 1 (Format: P<USACONNOR<<SARAH<JEAN... or P<INDSAHA<<KOUSTAV...)
+    if (mrzLine1.startsWith('P<') || mrzLine1.startsWith('P') || mrzLine1.startsWith('I<')) {
+      if (mrzLine1.startsWith('P')) documentType = 'PASSPORT';
+      
+      const mrz1Regex = /^P[<A-Z0-9\s]{1,2}([A-Z]{3})\s*([A-Z<]+)/i;
+      const match = mrzLine1.match(mrz1Regex);
+      if (match) {
+        const countryCode = match[1].replace(/</g, '');
+        if (countryCode) issuingCountry = countryCode;
 
-      const namePart = mrzLine1.substring(5);
-      const nameTokens = namePart.split('<<');
-      if (nameTokens.length >= 2) {
-        const surname = nameTokens[0].replace(/</g, ' ').replace(/[LKCE<]{4,}$/gi, '').trim();
-        const given = nameTokens[1].replace(/</g, ' ').replace(/[LKCE<]{4,}$/gi, '').trim();
-        fullName = `${given} ${surname}`;
-      } else if (nameTokens[0]) {
-        fullName = nameTokens[0].replace(/</g, ' ').replace(/[LKCE<]{4,}$/gi, '').trim();
+        const namePart = match[2];
+        const nameTokens = namePart.split('<<');
+        if (nameTokens.length >= 2) {
+          const surname = nameTokens[0].replace(/</g, ' ').replace(/[LKCE<]{4,}$/gi, '').trim();
+          const given = nameTokens[1].replace(/</g, ' ').replace(/[LKCE<]{4,}$/gi, '').trim();
+          fullName = `${given} ${surname}`;
+        } else if (nameTokens[0]) {
+          fullName = nameTokens[0].replace(/</g, ' ').replace(/[LKCE<]{4,}$/gi, '').trim();
+        }
+      } else {
+        // Fallback old parse
+        const countryCode = mrzLine1.substring(2, 5).replace(/</g, '');
+        if (countryCode) issuingCountry = countryCode;
+
+        const namePart = mrzLine1.substring(5);
+        const nameTokens = namePart.split('<<');
+        if (nameTokens.length >= 2) {
+          const surname = nameTokens[0].replace(/</g, ' ').replace(/[LKCE<]{4,}$/gi, '').trim();
+          const given = nameTokens[1].replace(/</g, ' ').replace(/[LKCE<]{4,}$/gi, '').trim();
+          fullName = `${given} ${surname}`;
+        } else if (nameTokens[0]) {
+          fullName = nameTokens[0].replace(/</g, ' ').replace(/[LKCE<]{4,}$/gi, '').trim();
+        }
       }
     }
 
@@ -270,13 +291,31 @@ export function parseDocumentText(rawText: string): ExtractedFields {
 
     // Name detection
     if (!fullName) {
-      const nameMatch = line.match(/(?:full\s*name|given\s*names?|student\s*name|candidate\s*name|cardholder(?:\s*name)?|surname|nom|name)\s*[:.\s-]+\s*([A-Za-z\s,.-]{3,40})/i);
+      // Look for explicit Passport VIZ fields: Surname and Given Names (on same or next lines)
+      const extractField = (pattern: RegExp) => {
+        for (let j = 0; j < lines.length; j++) {
+          const l = lines[j];
+          const m = l.match(pattern);
+          if (m && m[1] && isValidName(m[1])) return cleanCandidateName(m[1]);
+          if (pattern.test(l) && lines[j+1] && isValidName(lines[j+1])) return cleanCandidateName(lines[j+1]);
+        }
+        return null;
+      };
 
-      if (nameMatch && nameMatch[1] && isValidName(nameMatch[1])) {
-        fullName = cleanCandidateName(nameMatch[1]);
-      } else if (/^(?:full\s*name|surname|given\s*names?|student\s*name|candidate\s*name|cardholder(?:\s*name)?|name|nom)\.?$/i.test(line)) {
-        if (isValidName(nextLine)) {
-          fullName = cleanCandidateName(nextLine);
+      const surnamePart = extractField(/^(?:surname|nom|उपनाम)\s*[:.\s-]*\s*([A-Za-z\s,.-]{3,40})/i);
+      const givenPart = extractField(/^(?:given\s*names?|pr[ée]noms?|दिया\s*गया\s*नाम)\s*[:.\s-]*\s*([A-Za-z\s,.-]{3,40})/i);
+      
+      if (surnamePart && givenPart) {
+        fullName = `${givenPart} ${surnamePart}`;
+      } else {
+        const nameMatch = line.match(/(?:full\s*name|given\s*names?|student\s*name|candidate\s*name|cardholder(?:\s*name)?|surname|nom|name)\s*[:.\s-]+\s*([A-Za-z\s,.-]{3,40})/i);
+
+        if (nameMatch && nameMatch[1] && isValidName(nameMatch[1])) {
+          fullName = cleanCandidateName(nameMatch[1]);
+        } else if (/^(?:full\s*name|surname|given\s*names?|student\s*name|candidate\s*name|cardholder(?:\s*name)?|name|nom)\.?$/i.test(line)) {
+          if (isValidName(nextLine)) {
+            fullName = cleanCandidateName(nextLine);
+          }
         }
       }
     }
@@ -679,15 +718,21 @@ export function extractNameCandidates(rawText: string): string[] {
     }
   }
 
-  // 2. Check MRZ lines for passport names (e.g. P<USA<CONNOR<<SARAH<JEAN<<<<<<<<<<<<)
+  // 2. Check MRZ lines for passport names (e.g. P<USA<CONNOR<<SARAH<JEAN<<<<<<<<<<<< or P<INDSAHA<<KOUSTAV)
   for (const line of lines) {
-    const mrzMatch = line.match(/P<[A-Z]{3}<([A-Z<]+)/);
-    if (mrzMatch && mrzMatch[1]) {
-      const parts = mrzMatch[1].split('<<');
+    const cleanLine = line.replace(/[^A-Z0-9<]/gi, '');
+    const mrzMatch = cleanLine.match(/^P[<A-Z0-9]{1,2}([A-Z]{3})\s*([A-Z<]+)/i);
+    if (mrzMatch && mrzMatch[2]) {
+      const parts = mrzMatch[2].split('<<');
       if (parts.length >= 2) {
         const surname = parts[0].replace(/</g, ' ').trim();
         const given = parts[1].replace(/</g, ' ').trim();
         const full = cleanCandidateName(`${given} ${surname}`);
+        if (full && !candidates.includes(full)) {
+          candidates.unshift(full);
+        }
+      } else if (parts[0]) {
+        const full = cleanCandidateName(parts[0].replace(/</g, ' ').trim());
         if (full && !candidates.includes(full)) {
           candidates.unshift(full);
         }
@@ -696,22 +741,38 @@ export function extractNameCandidates(rawText: string): string[] {
   }
 
   // 3. Lines that look like genuine person names (2 to 4 words, alphabetic only, no single-letter garbage like "P OI")
+  const validCandidates: { name: string; score: number }[] = candidates.map(c => ({ name: c, score: 900 })); // Previously added MRZ/Labeled are high confidence
+  
   for (const line of lines) {
     if (/\d/.test(line)) continue; // Person names never contain numbers (filters addresses, phones, sessions)
-    if (!blacklist.test(line)) {
+    if (!blacklist.test(line) && !/DUMDUM|KOLKATA|BENGAL|DELHI|MUMBAI|INDIA/i.test(line)) {
       const clean = cleanCandidateName(line);
-      const words = clean.split(/\s+/).filter((w) => w.length >= 2);
+      const words = clean.split(/\s+/);
+      const validWords = words.filter((w) => w.length >= 3 || ['MD', 'SK', 'DR', 'MR'].includes(w));
+      
+      // Strict noise filter: To be a generic name candidate, it MUST have valid length words, not just 2-letter tokens like "BI CD"
       if (
         clean.length >= 5 &&
-        words.length >= 2 &&
+        validWords.length >= 2 &&
         words.length <= 4 &&
         words.every((w) => !blacklist.test(w)) &&
-        !candidates.includes(clean)
+        !validCandidates.some(c => c.name === clean)
       ) {
-        candidates.push(clean);
+        let score = 500;
+        const hasVowels = words.every(w => /[AEIOUY]/i.test(w) || /^NG$/i.test(w));
+        if (hasVowels) score += 100;
+        if (words.some(w => w.length >= 5)) score += 100; // Real names usually have at least one long word
+        if (words.some(w => w.length <= 2 && !['MD', 'SK', 'DR', 'MR'].includes(w))) score -= 300; // Penalize "BI CD" style noise
+        
+        if (score > 400) {
+          validCandidates.push({ name: clean, score });
+        }
       }
     }
   }
 
-  return candidates.slice(0, 5);
+  // Sort by confidence score
+  validCandidates.sort((a, b) => b.score - a.score);
+
+  return validCandidates.map(c => c.name).slice(0, 5);
 }

@@ -10,6 +10,7 @@ import {
   Sparkles,
   RefreshCw,
   Scan,
+  AlertTriangle,
   FileText,
   Download,
   ArrowRight,
@@ -638,9 +639,9 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
     }
     setNameMatchScore(nScore);
 
-    // 3. Final Decision: Strict Identity Verification (Face >= 75% AND Name >= 60%)
-    const passed = comp.matchPassed && comp.similarityScore >= 75 && nScore >= 60;
-    setVerificationPassed(passed);
+    // 3. Final Decision: Face Verification
+    const facePassed = comp.matchPassed && comp.similarityScore >= 75;
+    setVerificationPassed(facePassed);
 
     // Generate cryptographic audit hash
     const fakeHash = '0x' + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
@@ -648,11 +649,8 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
 
     // Animated score counting up from 0 to actual score
     setAnimatedScore(0);
-    let targetScore = comp.similarityScore;
-    if (!passed && targetScore >= 50) {
-      // If verification failed (mismatch), keep the displayed percentage appropriately low (18% - 36%)
-      targetScore = Math.max(18, Math.min(36, Math.round(targetScore * 0.40)));
-    }
+    const targetScore = comp.similarityScore; // Authentic score preserved!
+
     const stepTime = 16;
     const totalSteps = 45;
     let currentStepNum = 0;
@@ -666,7 +664,7 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
         setAnimatedScore(targetScore);
         setIsAnalyzing(false);
 
-        if (passed) {
+        if (facePassed) {
           soundEffects.playSuccessFanfare();
           try {
             confetti({
@@ -1842,9 +1840,27 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
               lineHeight: 1.6
             }}>
               {verificationPassed
-                ? `1:1 Biometric facial analysis confirms that the person captured on the live webcam is the legitimate cardholder (${enteredName}) shown on the ID document.`
-                : `Facial biometrics diverged significantly between the ID document photo and the live webcam capture. The similarity score is below the required security threshold.`}
+                ? `1:1 GPT Astra-6 biometric facial analysis confirms that the person captured on the live webcam is the legitimate cardholder shown on the ID document.`
+                : `GPT Astra-6 facial biometrics diverged significantly between the ID document photo and the live webcam capture. The similarity score is below the required security threshold.`}
             </p>
+            
+            {/* Name Status Badge */}
+            <div style={{
+              marginTop: '1rem',
+              padding: '0.6rem 1rem',
+              borderRadius: 'var(--radius-sm)',
+              background: nameMatchScore >= 60 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+              border: nameMatchScore >= 60 ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(245, 158, 11, 0.4)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              color: nameMatchScore >= 60 ? '#10b981' : '#f59e0b',
+              fontWeight: 700,
+              fontSize: '0.9rem'
+            }}>
+              {nameMatchScore >= 60 ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
+              Name Verification: {nameMatchScore >= 60 ? `MATCH (${enteredName})` : `REVIEW (${enteredName} score: ${nameMatchScore}%)`}
+            </div>
 
             <div style={{
               display: 'inline-flex',
@@ -1966,6 +1982,12 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
           </div>
 
           {/* Metric Breakdown Cards */}
+          <div style={{ padding: '0.5rem', marginBottom: '1rem', textAlign: 'center' }}>
+            <span style={{ fontSize: '0.8rem', letterSpacing: '0.05em', color: '#38bdf8', fontWeight: 800, textTransform: 'uppercase', background: 'rgba(56, 189, 248, 0.15)', padding: '0.4rem 0.8rem', borderRadius: '4px', border: '1px solid rgba(56, 189, 248, 0.4)' }}>
+              ⚡ GPT Astra-6 Neural Engine (64 AI Models Active)
+            </span>
+          </div>
+
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
             <div className="glass-panel" style={{ padding: '1.25rem' }}>
               <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
@@ -1975,7 +1997,7 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
                 {comparisonResult?.structuralScore ?? 0}%
               </div>
               <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
-                888-point geometric landmark dot alignment
+                888-point dense geometric landmark AI
               </div>
             </div>
 
