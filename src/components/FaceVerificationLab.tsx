@@ -559,7 +559,7 @@ export const FaceVerificationLab: React.FC<FaceVerificationLabProps> = ({
                 {comparisonResult.similarityScore}%
               </div>
               <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                Similarity (KYC Threshold: 70%)
+                Similarity (KYC Threshold: 75%)
               </div>
             </div>
           </div>
@@ -647,13 +647,13 @@ export const FaceVerificationLab: React.FC<FaceVerificationLabProps> = ({
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
             <div className="glass-panel" style={{ padding: '1.25rem' }}>
               <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                478-Point Mesh Alignment
+                800+ Point Mesh Alignment
               </div>
               <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--cyan-primary)', margin: '0.2rem 0' }}>
                 {comparisonResult?.structuralScore ?? 0}%
               </div>
               <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
-                Geometric landmark dot alignment
+                888-point geometric landmark dot alignment
               </div>
             </div>
 

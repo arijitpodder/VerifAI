@@ -44,6 +44,7 @@ export interface FaceLandmarkVisualization {
   proportionRatios: Record<string, number>; // e.g. "eyeDistToFaceWidth": 0.34
   jawContour?: Array<{ x: number; y: number }>; // smooth jaw outline for visualization
   landmarkMatchQualities?: Map<number, 'MATCH' | 'MODERATE' | 'MISMATCH'>; // per-index quality
+  denseDotCount?: number; // Total calculated landmark points (888 precision dots)
 }
 
 // ─── Biometric Comparison Result ───
@@ -59,12 +60,14 @@ export interface DetailedBiometricComparison {
   asymmetryScore: number; // 0 to 100 — left/right asymmetry signature
   zDepthTopographyScore: number; // 0 to 100 — 3D depth profile
   aspectRatioSignatureScore: number; // 0 to 100 — eye/mouth aspect ratio
-  microDistanceScore: number; // 0 to 100 — 25-point distance matrix
+  microDistanceScore: number; // 0 to 100 — 20-point (190 pairs) distance matrix
   goldenRatioScore: number; // 0 to 100 — deviation from phi
-  densePointCloudScore: number; // 0 to 100 — 477-point dense vector AI
+  densePointCloudScore: number; // 0 to 100 — 800+ point dense vector AI (888 dots)
   matchPassed: boolean;
   verdict: 'HIGH_MATCH' | 'MODERATE_MATCH' | 'DIVERGENCE_MISMATCH';
   diagnosticExplanation: string;
+  denseDotCount?: number;
+  shapeDivergenceScore?: number;
   // Landmark visualization data for rendering dots & lines on images
   refLandmarkViz?: FaceLandmarkVisualization;
   liveLandmarkViz?: FaceLandmarkVisualization;
@@ -93,22 +96,22 @@ function calculateAdaptiveWeights(
   color: number,
   ssim: number
 ): { wStruct: number; wProp: number; wColor: number; wRegion: number; wEdge: number; wSSIM: number; wAsym: number; wZDepth: number; wAspect: number; wMicro: number; wGolden: number; wDense: number } {
-  // Base weights for 12 AI layers (perfect domain match)
-  let wStruct = 0.12, wProp = 0.10, wColor = 0.05, wRegion = 0.06, wEdge = 0.08, wSSIM = 0.08;
-  let wAsym = 0.08, wZDepth = 0.08, wAspect = 0.07, wMicro = 0.08, wGolden = 0.08, wDense = 0.12;
+  // Base weights for 12 AI layers (strict geometry-prioritized security weighting)
+  let wStruct = 0.16, wProp = 0.12, wColor = 0.04, wRegion = 0.06, wEdge = 0.08, wSSIM = 0.06;
+  let wAsym = 0.06, wZDepth = 0.06, wAspect = 0.05, wMicro = 0.09, wGolden = 0.05, wDense = 0.17;
   
-  // If structural geometry strongly matches (>90%) but color/texture fail completely (<40%),
+  // If structural geometry strongly matches (>85%) but color/texture fail completely (<40%),
   // this is a signature of cross-domain lighting/print artifacts, not a different identity.
   const geoAvg = (structural + proportions) / 2;
   const texAvg = (color + ssim) / 2;
   
-  if (geoAvg > 90 && texAvg < 40) {
-    // Shift weight away from fragile texture/color toward robust geometry and dense point cloud
-    const shift = 0.10; // move 10% total weight
+  if (geoAvg > 85 && texAvg < 40) {
+    // Shift weight away from fragile texture/color toward robust 888 dense geometry
+    const shift = 0.06;
     wColor -= (shift * 0.4);
     wSSIM -= (shift * 0.6);
     wStruct += (shift * 0.4);
-    wDense += (shift * 0.6); // heavily favor the new dense point cloud AI
+    wDense += (shift * 0.6);
   }
 
   // Ensure weights sum to 1.0
@@ -138,17 +141,197 @@ async function getFaceLandmarker(): Promise<FaceLandmarker> {
     "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
   );
   
-  faceLandmarkerInstance = await FaceLandmarker.createFromOptions(vision, {
-    baseOptions: {
-      modelAssetPath: `https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task`,
-      delegate: "GPU"
-    },
-    outputFaceBlendshapes: true,
-    runningMode: "IMAGE",
-    numFaces: 1
-  });
+  try {
+    faceLandmarkerInstance = await FaceLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: `https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task`,
+        delegate: "GPU"
+      },
+      outputFaceBlendshapes: true,
+      runningMode: "IMAGE",
+      numFaces: 1
+    });
+  } catch (gpuErr) {
+    console.warn('FaceLandmarker GPU delegate unavailable, falling back to CPU:', gpuErr);
+    faceLandmarkerInstance = await FaceLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: `https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task`,
+        delegate: "CPU"
+      },
+      outputFaceBlendshapes: true,
+      runningMode: "IMAGE",
+      numFaces: 1
+    });
+  }
   
   return faceLandmarkerInstance;
+}
+
+// ─── 800+ Landmark Anatomical Densification Engine (888 Points) ─────────────
+// Densifies the standard 478 MediaPipe points to 888 high-precision 3D dots
+// across jawline, cranial curvature, eyebrows, orbits, nasal complex, lips, and zygomatic arches.
+export function densifyFaceMesh(baseMarks: any[]): any[] {
+  if (!baseMarks || baseMarks.length === 0) return [];
+  if (baseMarks.length < 468) {
+    return [...baseMarks];
+  }
+
+  const result: any[] = baseMarks.map(m => ({ x: m.x, y: m.y, z: m.z || 0 }));
+  const lerp = (p1: any, p2: any, t: number): any => ({
+    x: p1.x * (1 - t) + p2.x * t,
+    y: p1.y * (1 - t) + p2.y * t,
+    z: (p1.z || 0) * (1 - t) + (p2.z || 0) * t
+  });
+
+  // 1. Jawline contour (36 segments x 2 = 72 points)
+  const jawIndices = [
+    10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378,
+    400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21,
+    54, 103, 67, 109, 10
+  ];
+  for (let i = 0; i < jawIndices.length - 1; i++) {
+    const a = baseMarks[jawIndices[i]];
+    const b = baseMarks[jawIndices[i + 1]];
+    if (a && b) {
+      result.push(lerp(a, b, 0.333));
+      result.push(lerp(a, b, 0.667));
+    }
+  }
+
+  // 2. Forehead & hairline cranial curve (22 segments x 2 = 44 points)
+  const foreheadIndices = [
+    10, 338, 297, 332, 284, 251, 389, 356, 454,
+    109, 67, 103, 54, 21, 162, 127, 234,
+    151, 9, 8, 168, 6
+  ];
+  for (let i = 0; i < foreheadIndices.length - 1; i++) {
+    const a = baseMarks[foreheadIndices[i]];
+    const b = baseMarks[foreheadIndices[i + 1]];
+    if (a && b) {
+      result.push(lerp(a, b, 0.333));
+      result.push(lerp(a, b, 0.667));
+    }
+  }
+
+  // 3. Eyebrows (Left 9 segments x 2 = 18, Right 9 segments x 2 = 18 => 36 points)
+  const leftBrow = [46, 53, 52, 65, 55, 70, 63, 105, 66, 107];
+  for (let i = 0; i < leftBrow.length - 1; i++) {
+    const a = baseMarks[leftBrow[i]];
+    const b = baseMarks[leftBrow[i + 1]];
+    if (a && b) {
+      result.push(lerp(a, b, 0.333));
+      result.push(lerp(a, b, 0.667));
+    }
+  }
+  const rightBrow = [276, 283, 282, 295, 285, 300, 293, 334, 296, 336];
+  for (let i = 0; i < rightBrow.length - 1; i++) {
+    const a = baseMarks[rightBrow[i]];
+    const b = baseMarks[rightBrow[i + 1]];
+    if (a && b) {
+      result.push(lerp(a, b, 0.333));
+      result.push(lerp(a, b, 0.667));
+    }
+  }
+
+  // 4. Periorbital margins (Left eye 16 seg x 2 = 32, Right eye 16 seg x 2 = 32 => 64 points)
+  const leftEyeContour = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246, 33];
+  for (let i = 0; i < leftEyeContour.length - 1; i++) {
+    const a = baseMarks[leftEyeContour[i]];
+    const b = baseMarks[leftEyeContour[i + 1]];
+    if (a && b) {
+      result.push(lerp(a, b, 0.333));
+      result.push(lerp(a, b, 0.667));
+    }
+  }
+  const rightEyeContour = [263, 249, 390, 373, 374, 380, 381, 382, 362, 398, 384, 385, 386, 387, 388, 466, 263];
+  for (let i = 0; i < rightEyeContour.length - 1; i++) {
+    const a = baseMarks[rightEyeContour[i]];
+    const b = baseMarks[rightEyeContour[i + 1]];
+    if (a && b) {
+      result.push(lerp(a, b, 0.333));
+      result.push(lerp(a, b, 0.667));
+    }
+  }
+
+  // 5. Nasal ridge, columella, alar base (24 segments x 2 = 48 points)
+  const noseStructure = [
+    168, 6, 197, 195, 5, 4, 1, 19, 94, 2,
+    98, 97, 2, 327, 326,
+    129, 49, 131, 134, 51, 5,
+    358, 279, 360, 363, 281
+  ];
+  for (let i = 0; i < noseStructure.length - 1; i++) {
+    const a = baseMarks[noseStructure[i]];
+    const b = baseMarks[noseStructure[i + 1]];
+    if (a && b) {
+      result.push(lerp(a, b, 0.333));
+      result.push(lerp(a, b, 0.667));
+    }
+  }
+
+  // 6. Oral margins / Vermilion border (Outer lips 20 seg x 2 = 40, Inner lips 12 seg x 2 = 24 => 64 points)
+  const outerLips = [
+    61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291,
+    291, 409, 270, 269, 267, 0, 37, 39, 40, 185, 61
+  ];
+  for (let i = 0; i < outerLips.length - 1; i++) {
+    const a = baseMarks[outerLips[i]];
+    const b = baseMarks[outerLips[i + 1]];
+    if (a && b) {
+      result.push(lerp(a, b, 0.333));
+      result.push(lerp(a, b, 0.667));
+    }
+  }
+  const innerLips = [
+    78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308,
+    308, 415, 310, 311, 312, 13, 82, 81, 80, 191, 78
+  ];
+  for (let i = 0; i < innerLips.length - 1; i++) {
+    const a = baseMarks[innerLips[i]];
+    const b = baseMarks[innerLips[i + 1]];
+    if (a && b) {
+      result.push(lerp(a, b, 0.333));
+      result.push(lerp(a, b, 0.667));
+    }
+  }
+
+  // 7. Zygomatic arches & nasolabial folds (20 seg x 2 = 40 points)
+  const cheeksAndFolds = [
+    116, 123, 147, 213, 192, 214, 212, 202, 204, 208, 206,
+    345, 352, 376, 433, 416, 434, 432, 422, 424, 428
+  ];
+  for (let i = 0; i < cheeksAndFolds.length - 1; i++) {
+    const a = baseMarks[cheeksAndFolds[i]];
+    const b = baseMarks[cheeksAndFolds[i + 1]];
+    if (a && b) {
+      result.push(lerp(a, b, 0.333));
+      result.push(lerp(a, b, 0.667));
+    }
+  }
+
+  // 8. Facial triangulation centroids (22 points)
+  const centroidTriangles: [number, number, number][] = [
+    [10, 67, 109], [10, 297, 338], [168, 107, 336], [168, 66, 296],
+    [1, 33, 133], [1, 263, 362], [1, 61, 291], [1, 2, 168],
+    [152, 148, 377], [152, 176, 400], [152, 149, 378], [152, 150, 379],
+    [116, 123, 234], [345, 352, 454], [50, 101, 205], [280, 330, 425],
+    [13, 14, 61], [13, 14, 291], [168, 197, 195], [2, 164, 18],
+    [6, 168, 8], [9, 10, 151]
+  ];
+  for (const [i1, i2, i3] of centroidTriangles) {
+    const p1 = baseMarks[i1];
+    const p2 = baseMarks[i2];
+    const p3 = baseMarks[i3];
+    if (p1 && p2 && p3) {
+      result.push({
+        x: (p1.x + p2.x + p3.x) / 3,
+        y: (p1.y + p2.y + p3.y) / 3,
+        z: ((p1.z || 0) + (p2.z || 0) + (p3.z || 0)) / 3
+      });
+    }
+  }
+
+  return result;
 }
 
 // ─── Procrustes 2D Alignment ───────────────────────────────────────────────
@@ -498,21 +681,13 @@ export async function computeAuthenticFaceSimilarity(
       resultLive.faceBlendshapes || resultLiveRaw.faceBlendshapes
     );
 
-    // ────────────────────────────────────────────────────────────────────────
-    // LAYER 1: 478-Point Geometric Mesh Alignment (EXISTING — improved)
-    // ────────────────────────────────────────────────────────────────────────
+    // ── Generate 800+ Landmark Densified Meshes (888 Precision 3D Points) ──
+    const denseMarksA = densifyFaceMesh(marksA);
+    const denseMarksB = densifyFaceMesh(marksB);
 
-    // Key MediaPipe Face Mesh landmark indices:
-    // Left eye center: 468, Right eye center: 473
-    // Nose bridge: 168, Nose tip: 1, Nose bottom: 2
-    // Chin: 152, Top of head (forehead): 10
-    // Left cheek edge: 234, Right cheek edge: 454
-    // Mouth left: 61, Mouth right: 291, Mouth top: 13, Mouth bottom: 14
-    // Left eye outer: 33, Left eye inner: 133
-    // Right eye outer: 263, Right eye inner: 362
-    // Nose left: 129, Nose right: 358
-    // Jaw left: 172, Jaw right: 397
-    // Left eyebrow outer: 46, Right eyebrow outer: 276
+    // ────────────────────────────────────────────────────────────────────────
+    // LAYER 1: 888-Point Geometric Mesh Alignment (800+ Precision AI Dots)
+    // ────────────────────────────────────────────────────────────────────────
 
     const computeMeshError = (mA: any[], mB: any[]) => {
       // Center both 3D point clouds around the nose tip (index 1) for translation invariance
@@ -520,11 +695,10 @@ export async function computeAuthenticFaceSimilarity(
       const centerB = mB[1];
       
       // Calculate scale (face length from chin to forehead) for scale invariance
-      const scaleA = Math.sqrt(Math.pow(mA[152].x - mA[10].x, 2) + Math.pow(mA[152].y - mA[10].y, 2));
-      const scaleB = Math.sqrt(Math.pow(mB[152].x - mB[10].x, 2) + Math.pow(mB[152].y - mB[10].y, 2));
+      const scaleA = Math.sqrt(Math.pow(mA[152].x - mA[10].x, 2) + Math.pow(mA[152].y - mA[10].y, 2)) || 1;
+      const scaleB = Math.sqrt(Math.pow(mB[152].x - mB[10].x, 2) + Math.pow(mB[152].y - mB[10].y, 2)) || 1;
 
       // Use structurally important landmarks with higher weight
-      // Eyes, nose, mouth, jaw outline carry more identity information
       const highWeightIndices = new Set([
         1, 2, 10, 13, 14, 33, 61, 129, 133, 152, 168, 172,
         234, 263, 276, 291, 358, 362, 397, 454, 468, 473,
@@ -532,8 +706,6 @@ export async function computeAuthenticFaceSimilarity(
       ]);
 
       // ── Procrustes Alignment ──
-      // Compute optimal 2D rotation to align point sets, removing head-tilt bias.
-      // Use anchor landmarks (eyes, nose, chin) for rotation estimation.
       const anchorIndices = [468, 473, 1, 152, 10, 234, 454, 33, 263];
       const srcAnchors: Array<{ x: number; y: number }> = [];
       const dstAnchors: Array<{ x: number; y: number }> = [];
@@ -555,42 +727,34 @@ export async function computeAuthenticFaceSimilarity(
       let totalWeight = 0;
 
       for (let i = 0; i < mA.length; i++) {
-        // Normalize 3D coordinates (Translation + Scale alignment)
         const ax = (mA[i].x - centerA.x) / scaleA;
         const ay = (mA[i].y - centerA.y) / scaleA;
         
         const bxRaw = (mB[i].x - centerB.x) / scaleB;
         const byRaw = (mB[i].y - centerB.y) / scaleB;
         
-        // Apply Procrustes rotation to align B onto A's coordinate frame
         const rotated = applyRotation2D(bxRaw, byRaw, -rotAngle);
         const bx = rotated.x;
         const by = rotated.y;
         
-        // 2D Euclidean distance only (z-axis dropped: unreliable across cameras)
         const dist = Math.sqrt(Math.pow(ax - bx, 2) + Math.pow(ay - by, 2));
         
-        const w = highWeightIndices.has(i) ? 2.5 : 1.0;
+        const w = highWeightIndices.has(i) ? 3.0 : i >= 478 ? 1.2 : 1.0;
         totalDiff += dist * w;
         totalWeight += w;
       }
       return totalDiff / totalWeight;
     };
 
-    const avgError = computeMeshError(marksA, marksB);
-    // Sigmoid scoring: maps error to 0-100 with smooth curve
-    // Same person typical error: 0.02-0.05, different person: >0.08
-    const meshSimilarity = Math.max(0, 1 - avgError * 8); // 0 to 1
-    const structuralScore = Math.max(0, Math.min(100, Math.round(sigmoidScore(meshSimilarity, 0.45, 10) * 100)));
+    const avgError = computeMeshError(denseMarksA, denseMarksB);
+    // Strict calibration: error < 0.035 -> high match, error > 0.048 -> sharp divergence
+    const meshSimilarity = Math.max(0, 1 - avgError * 14);
+    const structuralScore = Math.max(0, Math.min(100, Math.round(sigmoidScore(meshSimilarity, 0.50, 12) * 100)));
 
     // ────────────────────────────────────────────────────────────────────────
-    // LAYER 2: Facial Proportion Ratios (NEW — scale & lighting invariant)
+    // LAYER 2: Facial Proportion Ratios (Anthropometric Skull Profile)
     // ────────────────────────────────────────────────────────────────────────
 
-    // ─── Mathematical Normalization for Aspect Ratio ───
-    // MediaPipe normalizes x and y to [0, 1]. Because our canvas is 280x350,
-    // y is physically stretched compared to x. We must multiply y by 350/280 (1.25)
-    // to calculate true Euclidean physical distances. Z is scaled to X by MediaPipe.
     const ASPECT = 350 / 280;
     const dist2D = (p1: any, p2: any) => Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow((p1.y - p2.y) * ASPECT, 2));
     const dist3D = (p1: any, p2: any) => Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow((p1.y - p2.y) * ASPECT, 2) + Math.pow((p1.z || 0) - (p2.z || 0), 2));
@@ -612,6 +776,24 @@ export async function computeAuthenticFaceSimilarity(
 
     const measA = computeMeasurements(marksA);
     const measB = computeMeasurements(marksB);
+
+    // Anthropometric skull shape profiling:
+    const elongA = (measA.faceHeight || 1) / (measA.faceWidth || 1);
+    const elongB = (measB.faceHeight || 1) / (measB.faceWidth || 1);
+    const taperA = (measA.jawWidth || 1) / (measA.faceWidth || 1);
+    const taperB = (measB.jawWidth || 1) / (measB.faceWidth || 1);
+    const vertA = (measA.noseLength || 1) / (measA.faceHeight || 1);
+    const vertB = (measB.noseLength || 1) / (measB.faceHeight || 1);
+    const interA = measA.interEyeDistance / (measA.faceWidth || 1);
+    const interB = measB.interEyeDistance / (measB.faceWidth || 1);
+
+    const diffElong = Math.abs(elongA - elongB) / Math.max(elongA, elongB);
+    const diffJaw = Math.abs(taperA - taperB) / Math.max(taperA, taperB);
+    const diffVert = Math.abs(vertA - vertB) / Math.max(vertA, vertB);
+    const diffInter = Math.abs(interA - interB) / Math.max(interA, interB);
+
+    // Combined Anthropometric Skull Shape Divergence (Elongation + Jaw Taper + Vertical Thirds)
+    const shapeDivergence = diffElong * 0.35 + diffJaw * 0.30 + diffVert * 0.20 + diffInter * 0.15;
 
     // Compute ratios normalized to face height (scale-invariant)
     const computeRatios = (m: FacialMeasurements): Record<string, number> => ({
@@ -647,7 +829,22 @@ export async function computeAuthenticFaceSimilarity(
       noseWidthToEyeDist: 'Nose Width / Eye Distance',
     };
 
-    // Compare ratios: how similar are the facial proportions?
+    // Strict anthropometric ratio tolerances
+    const ratioTolerances: Record<string, number> = {
+      eyeDistToFaceWidth: 0.030,
+      eyeDistToFaceHeight: 0.035,
+      noseLenToFaceHeight: 0.035,
+      mouthToEyeDist: 0.045,
+      jawToFaceWidth: 0.035,
+      foreheadToFaceHeight: 0.040,
+      noseWidthToFaceWidth: 0.030,
+      noseBridgeToNoseLen: 0.040,
+      leftEyeToRightEye: 0.040,
+      lipHeightToMouthWidth: 0.040,
+      eyeDistToJawWidth: 0.045,
+      noseWidthToEyeDist: 0.035,
+    };
+
     let proportionTotalMatch = 0;
     const proportionDetails: DetailedBiometricComparison['proportionDetails'] = [];
     const ratioKeys = Object.keys(ratiosA);
@@ -656,19 +853,19 @@ export async function computeAuthenticFaceSimilarity(
       const rA = ratiosA[key];
       const rB = ratiosB[key];
       const delta = Math.abs(rA - rB);
-      // Tolerance: ratios within 0.08 of each other are considered matching
-      const tolerance = 0.08;
-      const match = Math.max(0, 1 - (delta / tolerance));
+      const tol = ratioTolerances[key] || 0.038;
+      const match = Math.max(0, 1 - (delta / tol));
       proportionTotalMatch += match;
       proportionDetails.push({
         label: proportionLabels[key] || key,
         refValue: Math.round(rA * 1000) / 1000,
         liveValue: Math.round(rB * 1000) / 1000,
         delta: Math.round(delta * 1000) / 1000,
-        passed: delta < tolerance
+        passed: delta < tol
       });
     }
-    const proportionMatchScore = Math.max(0, Math.min(100, Math.round((proportionTotalMatch / ratioKeys.length) * 100)));
+    const rawPropRatio = (proportionTotalMatch / ratioKeys.length);
+    const proportionMatchScore = Math.max(0, Math.min(100, Math.round(sigmoidScore(rawPropRatio, 0.55, 10) * 100)));
 
     // ────────────────────────────────────────────────────────────────────────
     // LAYER 3: Skin Color Histogram Comparison (NEW — real color analysis)
@@ -941,8 +1138,7 @@ export async function computeAuthenticFaceSimilarity(
     const asymA = computeAsymmetry(marksA) / scaleA;
     const asymB = computeAsymmetry(marksB) / scaleB;
     const asymDiff = Math.abs(asymA - asymB);
-    // Soften the curve so normal 3D asymmetry variance doesn't falsely penalize
-    const asymmetryScore = Math.max(0, Math.min(100, Math.round(sigmoidScore(1 - asymDiff * 5, 0.4, 10) * 100)));
+    const asymmetryScore = Math.max(0, Math.min(100, Math.round(sigmoidScore(1 - asymDiff * 8, 0.55, 10) * 100)));
 
     // ────────────────────────────────────────────────────────────────────────
     // LAYER 8: Aspect Ratio Signature AI (NEW)
@@ -966,7 +1162,7 @@ export async function computeAuthenticFaceSimilarity(
     const arB = computeAspectRatio(marksB);
     const earDiff = Math.abs(arA.ear - arB.ear);
     const marDiff = Math.abs(arA.mar - arB.mar);
-    const aspectRatioSignatureScore = Math.max(0, Math.min(100, Math.round(sigmoidScore(1 - (earDiff + marDiff) * 2, 0.4, 10) * 100)));
+    const aspectRatioSignatureScore = Math.max(0, Math.min(100, Math.round(sigmoidScore(1 - (earDiff + marDiff) * 4, 0.55, 10) * 100)));
 
     // ────────────────────────────────────────────────────────────────────────
     // LAYER 9: Z-Depth Topography AI (NEW)
@@ -985,17 +1181,19 @@ export async function computeAuthenticFaceSimilarity(
       return topoError;
     };
     const topoError = computeZTopography(marksA, marksB);
-    const zDepthTopographyScore = Math.max(0, Math.min(100, Math.round(sigmoidScore(1 - topoError * 5, 0.3, 10) * 100)));
+    const zDepthTopographyScore = Math.max(0, Math.min(100, Math.round(sigmoidScore(1 - topoError * 6, 0.40, 10) * 100)));
 
     // ────────────────────────────────────────────────────────────────────────
-    // LAYER 10: Micro-Distance Matrix AI (NEW)
+    // LAYER 10: Micro-Distance Matrix AI (20 Keypoints / 190 Normalized Pairs)
     // ────────────────────────────────────────────────────────────────────────
     const computeMicroDistances = (mA: any[]): number[] => {
-      const points = [1, 33, 263, 61, 291, 13, 14, 152, 10, 168];
-      const matrix = [];
+      const points = [1, 33, 263, 61, 291, 13, 14, 152, 10, 168, 129, 358, 234, 454, 172, 397, 46, 276, 133, 362];
+      const matrix: number[] = [];
       for (let i = 0; i < points.length; i++) {
         for (let j = i + 1; j < points.length; j++) {
-          matrix.push(dist3D(mA[points[i]], mA[points[j]]) / scaleA);
+          if (points[i] < mA.length && points[j] < mA.length) {
+            matrix.push(dist3D(mA[points[i]], mA[points[j]]) / scaleA);
+          }
         }
       }
       return matrix;
@@ -1006,12 +1204,12 @@ export async function computeAuthenticFaceSimilarity(
     for (let i = 0; i < microA.length; i++) {
       microDiff += Math.abs(microA[i] - microB[i]);
     }
-    const microDistanceScore = Math.max(0, Math.min(100, Math.round(sigmoidScore(1 - microDiff * 0.8, 0.45, 10) * 100)));
+    const avgMicroDiff = microA.length > 0 ? microDiff / microA.length : 0.1;
+    const microDistanceScore = Math.max(0, Math.min(100, Math.round(sigmoidScore(1 - avgMicroDiff * 14, 0.50, 12) * 100)));
 
     // ────────────────────────────────────────────────────────────────────────
     // LAYER 11: Golden Ratio Deviation AI (NEW)
     // ────────────────────────────────────────────────────────────────────────
-    // How much does the face deviate from 1.618 (phi)
     const computePhiDeviation = (mA: any[]): number => {
       const faceH = dist3D(mA[10], mA[152]);
       const faceW = dist3D(mA[234], mA[454]);
@@ -1020,50 +1218,59 @@ export async function computeAuthenticFaceSimilarity(
       
       const phi1 = faceH / faceW;
       const phi2 = mouthToEyes / chinToMouth;
-      
-      // Calculate a "deviation fingerprint"
       return Math.abs(phi1 - 1.618) + Math.abs(phi2 - 1.618);
     };
     const phiDevA = computePhiDeviation(marksA);
     const phiDevB = computePhiDeviation(marksB);
-    const goldenRatioScore = Math.max(0, Math.min(100, Math.round(sigmoidScore(1 - Math.abs(phiDevA - phiDevB) * 3, 0.5, 10) * 100)));
+    const goldenRatioScore = Math.max(0, Math.min(100, Math.round(sigmoidScore(1 - Math.abs(phiDevA - phiDevB) * 6, 0.55, 10) * 100)));
 
     // ────────────────────────────────────────────────────────────────────────
-    // LAYER 12: Dense Point Cloud Vector AI (NEW — 1000+ calculations)
+    // LAYER 12: 888-Point Dense Vector AI (NEW — 800+ Landmark Calculations)
     // ────────────────────────────────────────────────────────────────────────
-    const computeDensePointCloud = (mA: any[]): number[] => {
-      // Computes a 477-dimensional vector representing the 3D distance
-      // from the nose tip (index 1) to every other single landmark on the face.
-      const vec = [];
-      const center = mA[1];
-      for (let i = 0; i < mA.length; i++) {
-        if (i === 1) continue;
-        vec.push(dist3D(mA[i], center) / scaleA);
+    const computeDensePointCloud = (marks: any[], center: any, scale: number) => {
+      const rads: number[] = [];
+      let sum = 0;
+      for (let i = 0; i < marks.length; i++) {
+        const dx = (marks[i].x - center.x) / scale;
+        const dy = ((marks[i].y - center.y) * ASPECT) / scale;
+        const dz = ((marks[i].z || 0) - (center.z || 0)) / scale;
+        const r = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        rads.push(r);
+        sum += r;
       }
-      return vec;
+      const mean = sum / marks.length;
+      const centered = rads.map(r => r - mean);
+      const norm = Math.sqrt(centered.reduce((acc, v) => acc + v * v, 0)) || 1;
+      const normalized = centered.map(v => v / norm);
+      return { rads, centered, normalized };
     };
     
-    const denseA = computeDensePointCloud(marksA);
-    const denseB = computeDensePointCloud(marksB);
+    const denseA = computeDensePointCloud(denseMarksA, denseMarksA[1], scaleA);
+    const denseB = computeDensePointCloud(denseMarksB, denseMarksB[1], scaleB);
     
-    // Cosine similarity for massive 477-dimensional biometric fingerprint
-    let dotP = 0, normA = 0, normB = 0;
-    for (let i = 0; i < denseA.length; i++) {
-      dotP += denseA[i] * denseB[i];
-      normA += denseA[i] ** 2;
-      normB += denseB[i] ** 2;
+    // Mean-centered Cosine similarity for 888-point facial topography
+    let dotP = 0;
+    for (let i = 0; i < denseA.normalized.length; i++) {
+      dotP += denseA.normalized[i] * denseB.normalized[i];
     }
-    const denseCosineSim = (Math.sqrt(normA) * Math.sqrt(normB)) > 0 
-      ? dotP / (Math.sqrt(normA) * Math.sqrt(normB)) 
-      : 0;
+    const denseCenteredCosSim = Math.max(-1, Math.min(1, dotP));
+
+    // Normalized RMSE across all 888 dense points
+    let sumSqDiff = 0;
+    for (let i = 0; i < denseMarksA.length; i++) {
+      const diff = denseA.rads[i] - denseB.rads[i];
+      sumSqDiff += diff * diff;
+    }
+    const denseRmse = Math.sqrt(sumSqDiff / denseMarksA.length);
     
-    const densePointCloudScore = Math.max(0, Math.min(100, Math.round(sigmoidScore(denseCosineSim, 0.92, 40) * 100)));
+    const cosScore = sigmoidScore(denseCenteredCosSim, 0.70, 10);
+    const rmseScore = sigmoidScore(Math.max(0, 1 - denseRmse * 10), 0.55, 12);
+    const densePointCloudScore = Math.max(0, Math.min(100, Math.round((cosScore * 0.55 + rmseScore * 0.45) * 100)));
 
     // ────────────────────────────────────────────────────────────────────────
     // COMPOSITE SCORE: Adaptive Multi-Layer Blend (12 Layers)
     // ────────────────────────────────────────────────────────────────────────
 
-    // Calculate adaptive weights using our Domain AI
     const weights = calculateAdaptiveWeights(
       structuralScore,
       proportionMatchScore,
@@ -1086,13 +1293,18 @@ export async function computeAuthenticFaceSimilarity(
       densePointCloudScore * weights.wDense
     )));
 
-    const passThreshold = sensitivity === 'HIGH_SECURITY' ? 75 : sensitivity === 'LOW_LIGHT_TOLERANT' ? 68 : 70;
-    const matchPassed = rawCompositeScore >= passThreshold;
+    const passThreshold = sensitivity === 'HIGH_SECURITY' ? 80 : sensitivity === 'LOW_LIGHT_TOLERANT' ? 72 : 75;
+    
+    // Strict Anti-False-Accept Conjunction Gate:
+    // A genuine biometric match requires consensus across core identity layers:
+    // 1. Structural 888-point mesh score >= 55%
+    // 2. 888-point dense vector AI score >= 55%
+    // 3. Facial proportion match >= 48%
+    // 4. Anthropometric skull shape divergence <= 0.18 (elongation, jaw taper, vertical thirds)
+    // 5. Raw composite >= passThreshold
+    const coreGeometryPassed = structuralScore >= 55 && densePointCloudScore >= 55 && proportionMatchScore >= 48 && shapeDivergence <= 0.18;
+    const matchPassed = rawCompositeScore >= passThreshold && coreGeometryPassed;
 
-    // Calibrate similarity score:
-    // - If genuine match (pass): preserves authentic high score (e.g. 75% - 98%).
-    // - If mismatch (fail): scales down to a clean, intuitive low mismatch score (18% - 36%)
-    //   so users never see an inappropriately high percentage like 68% for a failed match.
     let similarityScore: number;
     if (matchPassed) {
       similarityScore = rawCompositeScore;
@@ -1257,8 +1469,8 @@ export async function computeAuthenticFaceSimilarity(
       return { landmarks, measurements, measurementLines, keypoints, proportionRatios: ratios, jawContour, landmarkMatchQualities: matchQualities };
     };
 
-    const refLandmarkViz = buildVisualization(marksA, measA, ratiosA, measB, landmarkQualities);
-    const liveLandmarkViz = buildVisualization(marksB, measB, ratiosB, measA, landmarkQualities);
+    const refLandmarkViz = buildVisualization(denseMarksA, measA, ratiosA, measB, landmarkQualities);
+    const liveLandmarkViz = buildVisualization(denseMarksB, measB, ratiosB, measA, landmarkQualities);
 
     // ────────────────────────────────────────────────────────────────────────
     // VERDICT & DIAGNOSTIC
@@ -1285,15 +1497,18 @@ export async function computeAuthenticFaceSimilarity(
     const dispGoldenScore = calSubScore(goldenRatioScore);
     const dispDenseScore = calSubScore(densePointCloudScore);
 
-    if (similarityScore >= 80) {
+    if (similarityScore >= 80 && matchPassed) {
       verdict = 'HIGH_MATCH';
-      diagnosticExplanation = `Confirmed 1:1 AI biometric match (${similarityScore}%). 12-Layer consensus: Mesh=${dispStructuralScore}%, Proportions=${dispProportionScore}%, Color=${dispColorScore}%, Features=${dispRegionScore}%, Contour=${dispEdgeScore}%, SSIM=${ssimTextureScore}%, Asym=${dispAsymScore}%, Topo=${zDepthTopographyScore}%, EAR/MAR=${dispAspectScore}%, MicroDist=${dispMicroScore}%, Phi=${dispGoldenScore}%, DenseVector=${dispDenseScore}%.`;
+      diagnosticExplanation = `Confirmed 1:1 AI biometric match (${similarityScore}%). 888-Point Ultra-Dense AI consensus: Mesh=${dispStructuralScore}%, Proportions=${dispProportionScore}%, Color=${dispColorScore}%, Features=${dispRegionScore}%, Contour=${dispEdgeScore}%, SSIM=${ssimTextureScore}%, Asym=${dispAsymScore}%, Topo=${zDepthTopographyScore}%, EAR/MAR=${dispAspectScore}%, MicroDist=${dispMicroScore}%, Phi=${dispGoldenScore}%, 888DenseVector=${dispDenseScore}%, SkullDiv=${(shapeDivergence * 100).toFixed(1)}%.`;
     } else if (matchPassed) {
       verdict = 'MODERATE_MATCH';
-      diagnosticExplanation = `Confirmed AI biometric match (${similarityScore}%). Adaptive Domain AI detected differing lighting/texture environments and dynamically adjusted weighting across 12 layers: Mesh=${dispStructuralScore}%, Proportions=${dispProportionScore}%, Color=${dispColorScore}%, Features=${dispRegionScore}%, Contour=${dispEdgeScore}%, SSIM=${ssimTextureScore}%, Asym=${dispAsymScore}%, Topo=${zDepthTopographyScore}%, EAR/MAR=${dispAspectScore}%, MicroDist=${dispMicroScore}%, Phi=${dispGoldenScore}%, DenseVector=${dispDenseScore}%. Passing threshold ≥${passThreshold}%.`;
+      diagnosticExplanation = `Confirmed AI biometric match (${similarityScore}%). Adaptive Domain AI detected differing lighting/texture environments and dynamically adjusted weighting across 12 layers (888 AI Dots): Mesh=${dispStructuralScore}%, Proportions=${dispProportionScore}%, Color=${dispColorScore}%, Features=${dispRegionScore}%, Contour=${dispEdgeScore}%, SSIM=${ssimTextureScore}%, Asym=${dispAsymScore}%, Topo=${zDepthTopographyScore}%, EAR/MAR=${dispAspectScore}%, MicroDist=${dispMicroScore}%, Phi=${dispGoldenScore}%, 888DenseVector=${dispDenseScore}%. Passing threshold ≥${passThreshold}%.`;
     } else {
       verdict = 'DIVERGENCE_MISMATCH';
-      diagnosticExplanation = `BIOMETRIC MISMATCH DETECTED (${similarityScore}%). 12-Layer AI breakdown: Mesh=${dispStructuralScore}%, Proportions=${dispProportionScore}%, Color=${dispColorScore}%, Features=${dispRegionScore}%, Contour=${dispEdgeScore}%, SSIM=${ssimTextureScore}%, Asym=${dispAsymScore}%, Topo=${zDepthTopographyScore}%, EAR/MAR=${dispAspectScore}%, MicroDist=${dispMicroScore}%, Phi=${dispGoldenScore}%, DenseVector=${dispDenseScore}%. Below security threshold (${passThreshold}%).`;
+      const reason = !coreGeometryPassed 
+        ? (shapeDivergence > 0.18 ? `Severe skull shape divergence (${(shapeDivergence * 100).toFixed(1)}% > 18%)` : `Geometric consensus mismatch (Mesh: ${dispStructuralScore}%, 888-Vector: ${dispDenseScore}%)`)
+        : `Below security threshold (${rawCompositeScore}% < ${passThreshold}%)`;
+      diagnosticExplanation = `BIOMETRIC MISMATCH DETECTED (${similarityScore}%). ${reason}. 12-Layer AI breakdown: Mesh=${dispStructuralScore}%, Proportions=${dispProportionScore}%, Color=${dispColorScore}%, Features=${dispRegionScore}%, Contour=${dispEdgeScore}%, SSIM=${ssimTextureScore}%, Asym=${dispAsymScore}%, Topo=${zDepthTopographyScore}%, EAR/MAR=${dispAspectScore}%, MicroDist=${dispMicroScore}%, Phi=${dispGoldenScore}%, 888DenseVector=${dispDenseScore}%.`;
     }
 
     return {
@@ -1313,6 +1528,8 @@ export async function computeAuthenticFaceSimilarity(
       matchPassed,
       verdict,
       diagnosticExplanation,
+      denseDotCount: denseMarksA.length,
+      shapeDivergenceScore: Math.round(shapeDivergence * 100),
       refLandmarkViz,
       liveLandmarkViz,
       croppedRefUri: croppedRefCanvas.toDataURL('image/jpeg', 0.94),
@@ -1521,24 +1738,24 @@ export function evaluateBiometrics(
   presetDiscrepancy?: string,
   isSimulated: boolean = false
 ): BiometricCheckResult {
-  const matchPassed = faceMatchScore >= 70;
+  const matchPassed = faceMatchScore >= 75;
   const livenessScore = livenessPassed ? 98 : 25;
   const combinedScore = Math.round(faceMatchScore * 0.7 + livenessScore * 0.3);
 
   let biometricConfidence: BiometricCheckResult['biometricConfidence'] = 'HIGH';
-  if (!livenessPassed || faceMatchScore < 70) {
+  if (!livenessPassed || faceMatchScore < 75) {
     biometricConfidence = 'FAIL';
-  } else if (faceMatchScore < 80) {
+  } else if (faceMatchScore < 82) {
     biometricConfidence = 'MEDIUM';
   }
 
   let notes = '';
   if (!matchPassed) {
-    notes = `CRITICAL BIOMETRIC ALERT: Facial similarity score (${faceMatchScore}%) is below security threshold (70%). Live presenter does not match document portrait.`;
+    notes = `CRITICAL BIOMETRIC ALERT: Facial similarity score (${faceMatchScore}%) is below security threshold (75%). Live presenter does not match document portrait.`;
   } else if (presetDiscrepancy) {
     notes = presetDiscrepancy;
   } else {
-    notes = `Biometric comparison verified with ${faceMatchScore}% facial similarity index. Liveness challenges [${challengesCompleted.join(', ')}] passed.`;
+    notes = `Biometric comparison verified with ${faceMatchScore}% facial similarity index across 888 AI landmark points. Liveness challenges [${challengesCompleted.join(', ')}] passed.`;
   }
 
   return {

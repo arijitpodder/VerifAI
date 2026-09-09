@@ -638,8 +638,8 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
     }
     setNameMatchScore(nScore);
 
-    // 3. Final Decision: Strict Identity Verification (Face >= 70% AND Name >= 60%)
-    const passed = comp.matchPassed && comp.similarityScore >= 70 && nScore >= 60;
+    // 3. Final Decision: Strict Identity Verification (Face >= 75% AND Name >= 60%)
+    const passed = comp.matchPassed && comp.similarityScore >= 75 && nScore >= 60;
     setVerificationPassed(passed);
 
     // Generate cryptographic audit hash
@@ -1969,13 +1969,13 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
             <div className="glass-panel" style={{ padding: '1.25rem' }}>
               <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                478-Point Mesh Alignment
+                800+ Point Mesh Alignment
               </div>
               <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--cyan-primary)', margin: '0.2rem 0' }}>
                 {comparisonResult?.structuralScore ?? 0}%
               </div>
               <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
-                Geometric landmark dot alignment
+                888-point geometric landmark dot alignment
               </div>
             </div>
 

@@ -6,7 +6,7 @@ interface FaceLandmarkOverlayProps {
   visualization?: FaceLandmarkVisualization;
   width: number;
   height: number;
-  showAllDots?: boolean;      // Show all 478 mesh dots
+  showAllDots?: boolean;      // Show all 800+ mesh dots (888 precision points)
   showKeypoints?: boolean;    // Show colored key landmarks
   showMeasurements?: boolean; // Show measurement lines with labels
   showMeshLines?: boolean;    // Show connecting mesh triangles
@@ -143,16 +143,19 @@ export const FaceLandmarkOverlay: React.FC<FaceLandmarkOverlayProps> = ({
       }
     }
 
-    // ── Draw all 478 landmark dots ──
+    // ── Draw all 800+ landmark dots (888 precision dots) ──
     if (showAllDots && landmarks.length > 0) {
       for (let i = 0; i < landmarks.length; i++) {
         const pt = landmarks[i];
         const x = pt.x * w;
         const y = pt.y * h;
 
+        const isDenseExt = i >= 478;
         ctx.beginPath();
-        ctx.arc(x, y, 1.2, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(16, 185, 129, ${0.35 * pulse})`;
+        ctx.arc(x, y, isDenseExt ? 0.95 : 1.3, 0, Math.PI * 2);
+        ctx.fillStyle = isDenseExt
+          ? `rgba(0, 242, 254, ${0.42 * pulse})`
+          : `rgba(16, 185, 129, ${0.40 * pulse})`;
         ctx.fill();
       }
     }
@@ -340,7 +343,7 @@ export const FaceLandmarkOverlay: React.FC<FaceLandmarkOverlayProps> = ({
             boxShadow: '0 0 6px #10b981',
             display: 'inline-block'
           }} />
-          478 AI DOTS
+          {visualization.landmarks.length >= 800 ? `${visualization.landmarks.length} AI DOTS` : `${visualization.landmarks.length} AI DOTS`}
         </div>
       )}
 

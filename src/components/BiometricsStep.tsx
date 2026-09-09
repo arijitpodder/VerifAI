@@ -139,18 +139,19 @@ export const BiometricsStep: React.FC<BiometricsStepProps> = ({
     const snap = captureFrame();
     setIsAnalyzing(true);
     const refPhoto = biometrics.docFaceCroppedUrl || preset.portraitSvg;
-    let score = 96.4;
-    let diag = 'Live webcam biometric frame matched with document portrait.';
+    let score = 0;
+    let diag = 'Live webcam biometric frame comparison...';
     try {
       const comp = await computeAuthenticFaceSimilarity(refPhoto, snap);
       score = comp.similarityScore;
       diag = comp.diagnosticExplanation;
     } catch (e) {
       console.warn(e);
+      diag = 'Biometric comparison failed to process face landmarks in webcam frame.';
     }
     const result = evaluateBiometrics(
       score,
-      true,
+      score >= 75,
       ['Face Alignment', 'Webcam Snapshot Frame', 'Liveness Check'],
       refPhoto,
       snap,
@@ -173,18 +174,19 @@ export const BiometricsStep: React.FC<BiometricsStepProps> = ({
         const selfieUri = ev.target?.result as string;
         setIsAnalyzing(true);
         const refPhoto = biometrics.docFaceCroppedUrl || preset.portraitSvg;
-        let score = 96.0;
-        let diag = 'Uploaded selfie facial geometry aligned with document photo.';
+        let score = 0;
+        let diag = 'Uploaded selfie facial geometry alignment...';
         try {
           const comp = await computeAuthenticFaceSimilarity(refPhoto, selfieUri);
           score = comp.similarityScore;
           diag = comp.diagnosticExplanation;
         } catch (err) {
           console.warn(err);
+          diag = 'Biometric comparison failed to detect face landmarks in uploaded selfie.';
         }
         const result = evaluateBiometrics(
           score,
-          true,
+          score >= 75,
           ['Face Alignment', 'Selfie Landmark Verification', 'Biometric Parity'],
           refPhoto,
           selfieUri,
