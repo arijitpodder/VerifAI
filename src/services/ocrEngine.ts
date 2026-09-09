@@ -212,7 +212,7 @@ export function parseDocumentText(rawText: string): ExtractedFields {
     if (mrzLine1.startsWith('P<') || mrzLine1.startsWith('P') || mrzLine1.startsWith('I<')) {
       if (mrzLine1.startsWith('P')) documentType = 'PASSPORT';
       
-      const mrz1Regex = /^P[<A-Z0-9\s]{1,2}([A-Z]{3})\s*([A-Z<]+)/i;
+      const mrz1Regex = /^P[<A-Z0-9\s]?([A-Z]{3})\s*([A-Z<]+)/i;
       const match = mrzLine1.match(mrz1Regex);
       if (match) {
         const countryCode = match[1].replace(/</g, '');
@@ -721,7 +721,7 @@ export function extractNameCandidates(rawText: string): string[] {
   // 2. Check MRZ lines for passport names (e.g. P<USA<CONNOR<<SARAH<JEAN<<<<<<<<<<<< or P<INDSAHA<<KOUSTAV)
   for (const line of lines) {
     const cleanLine = line.replace(/[^A-Z0-9<]/gi, '');
-    const mrzMatch = cleanLine.match(/^P[<A-Z0-9]{1,2}([A-Z]{3})\s*([A-Z<]+)/i);
+    const mrzMatch = cleanLine.match(/^P[<A-Z0-9\s]?([A-Z]{3})\s*([A-Z<]+)/i);
     if (mrzMatch && mrzMatch[2]) {
       const parts = mrzMatch[2].split('<<');
       if (parts.length >= 2) {

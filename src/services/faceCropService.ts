@@ -161,7 +161,7 @@ function scanCardForPortraitZone(
   const ctx = canvas.getContext('2d');
 
   if (!ctx) {
-    return PRESET_BOXES.RIGHT_BADGE;
+    return PRESET_BOXES.LEFT_PORTRAIT;
   }
 
   ctx.drawImage(img, 0, 0, sampleW, sampleH);
@@ -325,8 +325,8 @@ function scanCardForPortraitZone(
     };
   }
 
-  // Fallback preset
-  return PRESET_BOXES.RIGHT_BADGE;
+  // Fallback preset (Left Portrait is standard for most Passports and DLs)
+  return PRESET_BOXES.LEFT_PORTRAIT;
 }
 
 /**
