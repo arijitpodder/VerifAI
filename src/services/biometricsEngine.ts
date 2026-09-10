@@ -373,7 +373,7 @@ export function cropFaceFromLandmarks(
   const imgW = img.naturalWidth || img.width;
   const imgH = img.naturalHeight || img.height;
 
-  // Compute face bounding box from landmarks with padding
+  // Compute face bounding box from landmarks
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const m of marks) {
     const px = m.x * imgW;
@@ -384,22 +384,41 @@ export function cropFaceFromLandmarks(
     if (py > maxY) maxY = py;
   }
 
-  // Add 20% padding around face
   const faceW = maxX - minX;
   const faceH = maxY - minY;
-  const padX = faceW * 0.20;
-  const padY = faceH * 0.20;
-  const cropX = Math.max(0, minX - padX);
-  const cropY = Math.max(0, minY - padY);
-  const cropW = Math.min(imgW - cropX, faceW + padX * 2);
-  const cropH = Math.min(imgH - cropY, faceH + padY * 2);
+  const centerX = (minX + maxX) / 2;
+  const centerY = (minY + maxY) / 2;
 
-  // Render into a 280×350 (4:5) normalized canvas
+  // Standard 280x350 (4:5 ratio) framing preserving natural aspect ratio
+  const targetAspect = 280 / 350; // 0.8
+  const boxH = Math.max(faceH * 1.55, (faceW * 1.55) / targetAspect);
+  const boxW = boxH * targetAspect;
+
+  const cropX = centerX - boxW / 2;
+  const cropY = centerY - boxH * 0.46;
+
   const canvas = document.createElement('canvas');
   canvas.width = 280;
   canvas.height = 350;
   const ctx = canvas.getContext('2d')!;
-  ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, 280, 350);
+
+  ctx.fillStyle = '#0f172a';
+  ctx.fillRect(0, 0, 280, 350);
+
+  const srcX = Math.max(0, cropX);
+  const srcY = Math.max(0, cropY);
+  const srcW = Math.min(imgW - srcX, boxW - (srcX - cropX));
+  const srcH = Math.min(imgH - srcY, boxH - (srcY - cropY));
+
+  const dstX = ((srcX - cropX) / boxW) * 280;
+  const dstY = ((srcY - cropY) / boxH) * 350;
+  const dstW = (srcW / boxW) * 280;
+  const dstH = (srcH / boxH) * 350;
+
+  if (srcW > 0 && srcH > 0 && dstW > 0 && dstH > 0) {
+    ctx.drawImage(img, srcX, srcY, srcW, srcH, dstX, dstY, dstW, dstH);
+  }
+
   return canvas;
 }
 
@@ -658,32 +677,64 @@ export async function computeAuthenticFaceSimilarity(
       return emptyResult('BIOMETRIC REJECTION: No face detected by AI in the live camera feed.');
     }
 
-    // Use direct native landmarks detected on standard 4:5 normalized portraits
-    const marksARaw = resultRefRaw.faceLandmarks[0];
-    const marksBRaw = resultLiveRaw.faceLandmarks[0];
+    // Crop both images to face-only region using detected landmarks (preserves 4:5 aspect ratio)
+    const croppedRefCanvas = cropFaceFromLandmarks(imgRef, resultRefRaw.faceLandmarks[0]);
+    const croppedLiveCanvas = cropFaceFromLandmarks(imgLive, resultLiveRaw.faceLandmarks[0]);
 
-    // Standard normalized 280x350 portrait canvases for color, SSIM, and visualization
-    const buildPortraitCanvas = (img: HTMLImageElement): HTMLCanvasElement => {
-      const c = document.createElement('canvas');
-      c.width = 280;
-      c.height = 350;
-      const ctx = c.getContext('2d');
-      if (ctx) {
-        ctx.drawImage(img, 0, 0, 280, 350);
+    // Second pass: re-detect landmarks on cropped/normalized face images
+    // This gives highly accurate landmark positions in the 280x350 space
+    const resultRef = landmarker.detect(croppedRefCanvas as unknown as HTMLImageElement);
+    const resultLive = landmarker.detect(croppedLiveCanvas as unknown as HTMLImageElement);
+
+    // Fallback: If second-pass detection misses on the cropped canvas,
+    // transform the high-confidence raw landmarks into the 280x350 canvas coordinate space
+    const getCroppedMarks = (
+      secondPassMarks: any[] | undefined,
+      rawMarks: any[],
+      img: HTMLImageElement
+    ): any[] => {
+      if (secondPassMarks && secondPassMarks.length > 0) {
+        return secondPassMarks;
       }
-      return c;
+      const imgW = img.naturalWidth || img.width;
+      const imgH = img.naturalHeight || img.height;
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const m of rawMarks) {
+        const px = m.x * imgW;
+        const py = m.y * imgH;
+        if (px < minX) minX = px;
+        if (py < minY) minY = py;
+        if (px > maxX) maxX = px;
+        if (py > maxY) maxY = py;
+      }
+      const faceW = maxX - minX;
+      const faceH = maxY - minY;
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
+      const targetAspect = 280 / 350;
+      const boxH = Math.max(faceH * 1.55, (faceW * 1.55) / targetAspect);
+      const boxW = boxH * targetAspect;
+      const cropX = centerX - boxW / 2;
+      const cropY = centerY - boxH * 0.46;
+
+      return rawMarks.map(m => ({
+        x: (m.x * imgW - cropX) / boxW,
+        y: (m.y * imgH - cropY) / boxH,
+        z: (m.z || 0) * (imgW / boxW)
+      }));
     };
-    const croppedRefCanvas = buildPortraitCanvas(imgRef);
-    const croppedLiveCanvas = buildPortraitCanvas(imgLive);
+
+    const marksARaw = getCroppedMarks(resultRef.faceLandmarks?.[0], resultRefRaw.faceLandmarks[0], imgRef);
+    const marksBRaw = getCroppedMarks(resultLive.faceLandmarks?.[0], resultLiveRaw.faceLandmarks[0], imgLive);
 
     // Apply expression normalization using blendshapes
     const marksA = normalizeExpression(
       marksARaw,
-      resultRefRaw.faceBlendshapes
+      resultRef.faceBlendshapes || resultRefRaw.faceBlendshapes
     );
     const marksB = normalizeExpression(
       marksBRaw,
-      resultLiveRaw.faceBlendshapes
+      resultLive.faceBlendshapes || resultLiveRaw.faceBlendshapes
     );
 
     // ── Generate 800+ Landmark Densified Meshes (888 Precision 3D Points) ──
@@ -1306,17 +1357,19 @@ export async function computeAuthenticFaceSimilarity(
       densePointCloudScore * weights.wDense
     )));
 
-    const passThreshold = sensitivity === 'HIGH_SECURITY' ? 78 : sensitivity === 'LOW_LIGHT_TOLERANT' ? 66 : 70;
+    const passThreshold = sensitivity === 'HIGH_SECURITY' ? 76 : sensitivity === 'LOW_LIGHT_TOLERANT' ? 64 : 68;
     
     // Astra-6 64-Model Anti-False-Accept Conjunction Gate:
     // A genuine biometric match requires consensus across core identity layers.
-    // Divergence threshold relaxed to 0.28 to support perspective discrepancy 
-    // between 85mm passport portraits and 24-28mm webcams at 40cm.
+    // Divergence threshold calibrated to support perspective discrepancy 
+    // between 85mm passport portraits and wide-angle webcams at 40cm.
     const coreGeometryPassed =
-      structuralScore >= 48 &&
-      densePointCloudScore >= 48 &&
-      proportionMatchScore >= 38 &&
-      (shapeDivergence <= 0.28 || (densePointCloudScore >= 62 && structuralScore >= 62 && shapeDivergence <= 0.32));
+      structuralScore >= 45 &&
+      densePointCloudScore >= 45 &&
+      proportionMatchScore >= 35 &&
+      (shapeDivergence <= 0.32 ||
+        (densePointCloudScore >= 58 && structuralScore >= 58 && shapeDivergence <= 0.38) ||
+        (rawCompositeScore >= 74 && shapeDivergence <= 0.40));
 
     const matchPassed = rawCompositeScore >= passThreshold && coreGeometryPassed;
 
@@ -1520,7 +1573,7 @@ export async function computeAuthenticFaceSimilarity(
     } else {
       verdict = 'DIVERGENCE_MISMATCH';
       const reason = !coreGeometryPassed 
-        ? (shapeDivergence > 0.28 ? `Severe skull shape divergence (${(shapeDivergence * 100).toFixed(1)}% > 28%)` : `Geometric consensus mismatch (Mesh: ${dispStructuralScore}%, 888-Vector: ${dispDenseScore}%)`)
+        ? (shapeDivergence > 0.32 ? `Severe skull shape divergence (${(shapeDivergence * 100).toFixed(1)}% > 32%)` : `Geometric consensus mismatch (Mesh: ${dispStructuralScore}%, 888-Vector: ${dispDenseScore}%)`)
         : `Below security threshold (${rawCompositeScore}% < ${passThreshold}%)`;
       diagnosticExplanation = `BIOMETRIC MISMATCH DETECTED (${similarityScore}%). ${reason}. 12-Layer AI breakdown: Mesh=${dispStructuralScore}%, Proportions=${dispProportionScore}%, Color=${dispColorScore}%, Features=${dispRegionScore}%, Contour=${dispEdgeScore}%, SSIM=${ssimTextureScore}%, Asym=${dispAsymScore}%, Topo=${zDepthTopographyScore}%, EAR/MAR=${dispAspectScore}%, MicroDist=${dispMicroScore}%, Phi=${dispGoldenScore}%, 888DenseVector=${dispDenseScore}%.`;
     }
@@ -1752,20 +1805,20 @@ export function evaluateBiometrics(
   presetDiscrepancy?: string,
   isSimulated: boolean = false
 ): BiometricCheckResult {
-  const matchPassed = faceMatchScore >= 70;
+  const matchPassed = faceMatchScore >= 68;
   const livenessScore = livenessPassed ? 98 : 25;
   const combinedScore = Math.round(faceMatchScore * 0.7 + livenessScore * 0.3);
 
   let biometricConfidence: BiometricCheckResult['biometricConfidence'] = 'HIGH';
-  if (!livenessPassed || faceMatchScore < 70) {
+  if (!livenessPassed || faceMatchScore < 68) {
     biometricConfidence = 'FAIL';
-  } else if (faceMatchScore < 80) {
+  } else if (faceMatchScore < 78) {
     biometricConfidence = 'MEDIUM';
   }
 
   let notes = '';
   if (!matchPassed) {
-    notes = `CRITICAL BIOMETRIC ALERT: Facial similarity score (${faceMatchScore}%) is below security threshold (70%). Live presenter does not match document portrait.`;
+    notes = `CRITICAL BIOMETRIC ALERT: Facial similarity score (${faceMatchScore}%) is below security threshold (68%). Live presenter does not match document portrait.`;
   } else if (presetDiscrepancy) {
     notes = presetDiscrepancy;
   } else {
