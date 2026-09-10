@@ -529,7 +529,7 @@ function computeSSIM(
 
     const avgSSIM = winCount > 0 ? ssimSum / winCount : 0;
     // SSIM ranges 0-1; calibrated for cross-domain print vs digital
-    return Math.max(0, Math.min(100, Math.round(sigmoidScore(avgSSIM, 0.34, 8) * 100)));
+    return Math.max(0, Math.min(100, Math.round(sigmoidScore(avgSSIM, 0.36, 8) * 100)));
   } catch {
     return 50;
   }
@@ -805,8 +805,8 @@ export async function computeAuthenticFaceSimilarity(
 
     const avgError = computeMeshError(denseMarksA, denseMarksB);
     // Cross-domain calibrated mesh alignment (paper ID card vs live webcam)
-    const rawMeshSim = Math.max(0, 1 - avgError / 0.090);
-    const structuralScore = Math.max(0, Math.min(100, Math.round(sigmoidScore(rawMeshSim, 0.45, 8) * 100)));
+    const rawMeshSim = Math.max(0, 1 - avgError / 0.088);
+    const structuralScore = Math.max(0, Math.min(100, Math.round(sigmoidScore(rawMeshSim, 0.46, 9) * 100)));
 
     // ────────────────────────────────────────────────────────────────────────
     // LAYER 2: Facial Proportion Ratios (Anthropometric Skull Profile)
@@ -896,18 +896,18 @@ export async function computeAuthenticFaceSimilarity(
 
     // Astra-6 64-Model Expanded Anthropometric Ratio Tolerances (Perspective-Aware)
     const ratioTolerances: Record<string, number> = {
-      eyeDistToFaceWidth: 0.065,
-      eyeDistToFaceHeight: 0.065,
-      noseLenToFaceHeight: 0.075,
-      mouthToEyeDist: 0.085,
-      jawToFaceWidth: 0.065,
-      foreheadToFaceHeight: 0.075,
-      noseWidthToFaceWidth: 0.055,
-      noseBridgeToNoseLen: 0.070,
-      leftEyeToRightEye: 0.075,
-      lipHeightToMouthWidth: 0.075,
-      eyeDistToJawWidth: 0.080,
-      noseWidthToEyeDist: 0.075,
+      eyeDistToFaceWidth: 0.055,
+      eyeDistToFaceHeight: 0.055,
+      noseLenToFaceHeight: 0.068,
+      mouthToEyeDist: 0.078,
+      jawToFaceWidth: 0.055,
+      foreheadToFaceHeight: 0.068,
+      noseWidthToFaceWidth: 0.048,
+      noseBridgeToNoseLen: 0.065,
+      leftEyeToRightEye: 0.070,
+      lipHeightToMouthWidth: 0.070,
+      eyeDistToJawWidth: 0.070,
+      noseWidthToEyeDist: 0.068,
     };
 
     let proportionTotalMatch = 0;
@@ -918,7 +918,7 @@ export async function computeAuthenticFaceSimilarity(
       const rA = ratiosA[key];
       const rB = ratiosB[key];
       const delta = Math.abs(rA - rB);
-      const tol = ratioTolerances[key] || 0.065;
+      const tol = ratioTolerances[key] || 0.060;
       const match = Math.max(0, 1 - (delta / tol));
       proportionTotalMatch += match;
       proportionDetails.push({
@@ -930,7 +930,7 @@ export async function computeAuthenticFaceSimilarity(
       });
     }
     const rawPropRatio = (proportionTotalMatch / ratioKeys.length);
-    const proportionMatchScore = Math.max(0, Math.min(100, Math.round(sigmoidScore(rawPropRatio, 0.44, 8) * 100)));
+    const proportionMatchScore = Math.max(0, Math.min(100, Math.round(sigmoidScore(rawPropRatio, 0.48, 9) * 100)));
 
     // ────────────────────────────────────────────────────────────────────────
     // LAYER 3: Skin Color Histogram Comparison (NEW — real color analysis)
@@ -1126,7 +1126,7 @@ export async function computeAuthenticFaceSimilarity(
         }
 
         const rawSim = totalSimilarity / regions.length;
-        return Math.max(0, Math.min(100, Math.round(sigmoidScore(rawSim, 0.60, 8) * 100)));
+        return Math.max(0, Math.min(100, Math.round(sigmoidScore(rawSim, 0.65, 9) * 100)));
       } catch {
         return 50;
       }
@@ -1165,8 +1165,8 @@ export async function computeAuthenticFaceSimilarity(
     }
     const avgContourError = contourCount > 0 ? contourError / contourCount : avgError;
     // Sigmoid scoring for contour
-    const contourSimilarity = Math.max(0, 1 - avgContourError * 5.5);
-    const edgeGeometryScore = Math.max(0, Math.min(100, Math.round(sigmoidScore(contourSimilarity, 0.45, 8) * 100)));
+    const contourSimilarity = Math.max(0, 1 - avgContourError * 6.0);
+    const edgeGeometryScore = Math.max(0, Math.min(100, Math.round(sigmoidScore(contourSimilarity, 0.48, 8) * 100)));
 
     // ────────────────────────────────────────────────────────────────────────
     // LAYER 6: SSIM Texture Comparison (NEW — pixel-level structural similarity)
@@ -1272,8 +1272,8 @@ export async function computeAuthenticFaceSimilarity(
       microDiff += Math.abs(microA[i] - microB[i]);
     }
     const avgMicroDiff = microA.length > 0 ? microDiff / microA.length : 0.05;
-    const rawMicroSim = Math.max(0, 1 - avgMicroDiff * 7.5);
-    const microDistanceScore = Math.max(0, Math.min(100, Math.round(sigmoidScore(rawMicroSim, 0.45, 8) * 100)));
+    const rawMicroSim = Math.max(0, 1 - avgMicroDiff * 8.5);
+    const microDistanceScore = Math.max(0, Math.min(100, Math.round(sigmoidScore(rawMicroSim, 0.48, 8) * 100)));
 
     // ────────────────────────────────────────────────────────────────────────
     // LAYER 11: Golden Ratio Deviation AI (NEW)
@@ -1331,8 +1331,8 @@ export async function computeAuthenticFaceSimilarity(
     }
     const denseRmse = Math.sqrt(sumSqDiff / denseMarksA.length);
     
-    const cosScore = sigmoidScore(denseCenteredCosSim, 0.60, 8);
-    const rmseScore = sigmoidScore(Math.max(0, 1 - denseRmse * 8), 0.42, 8);
+    const cosScore = sigmoidScore(denseCenteredCosSim, 0.68, 9);
+    const rmseScore = sigmoidScore(Math.max(0, 1 - denseRmse * 8.5), 0.46, 8);
     const densePointCloudScore = Math.max(0, Math.min(100, Math.round((cosScore * 0.55 + rmseScore * 0.45) * 100)));
 
     // ────────────────────────────────────────────────────────────────────────
@@ -1361,22 +1361,21 @@ export async function computeAuthenticFaceSimilarity(
       densePointCloudScore * weights.wDense
     )));
 
-    const passThreshold = sensitivity === 'HIGH_SECURITY' ? 72 : sensitivity === 'LOW_LIGHT_TOLERANT' ? 62 : 66;
+    const passThreshold = sensitivity === 'HIGH_SECURITY' ? 74 : sensitivity === 'LOW_LIGHT_TOLERANT' ? 64 : 68;
     
-    // Astra-6 64-Model Multi-Layer Consensus Gate:
-    // Requires robust consensus across geometry rather than a single brittle boolean tripwire:
-    // 1. At least 2 out of the 3 primary geometric layers (Structural, 888-Vector, Proportions) >= 38%
-    // 2. Skull shape divergence <= 28% (0.28)
-    // 3. Inter-eye canthal distance disparity diffInter <= 15% (0.15)
-    const primaryPassCount =
-      (structuralScore >= 38 ? 1 : 0) +
-      (densePointCloudScore >= 38 ? 1 : 0) +
-      (proportionMatchScore >= 38 ? 1 : 0);
-
+    // Astra-6 64-Model Biometric Security Consensus Gate:
+    // Requires strict consensus across primary identity layers:
+    // 1. Structural 3D Procrustes mesh alignment >= 42%
+    // 2. 888-point dense topography vector >= 42%
+    // 3. Anthropometric facial proportions >= 45%
+    // 4. Skull shape divergence <= 22% (0.22)
+    // 5. Inter-eye canthal distance disparity diffInter <= 12% (0.12)
     const coreGeometryPassed =
-      primaryPassCount >= 2 &&
-      shapeDivergence <= 0.28 &&
-      diffInter <= 0.15;
+      structuralScore >= 42 &&
+      densePointCloudScore >= 42 &&
+      proportionMatchScore >= 45 &&
+      shapeDivergence <= 0.22 &&
+      diffInter <= 0.12;
 
     const matchPassed = rawCompositeScore >= passThreshold && coreGeometryPassed;
 
@@ -1580,10 +1579,10 @@ export async function computeAuthenticFaceSimilarity(
     } else {
       verdict = 'DIVERGENCE_MISMATCH';
       const reason = !coreGeometryPassed 
-        ? (diffInter > 0.15
-            ? `Inter-eye canthi disparity (${(diffInter * 100).toFixed(1)}% > 15%)`
-            : shapeDivergence > 0.28
-            ? `Skull shape divergence (${(shapeDivergence * 100).toFixed(1)}% > 28%)`
+        ? (diffInter > 0.12
+            ? `Inter-eye canthi disparity (${(diffInter * 100).toFixed(1)}% > 12%)`
+            : shapeDivergence > 0.22
+            ? `Skull shape divergence (${(shapeDivergence * 100).toFixed(1)}% > 22%)`
             : `Geometric consensus mismatch (Mesh: ${dispStructuralScore}%, 888-Vector: ${dispDenseScore}%, Proportions: ${dispProportionScore}%)`)
         : `Below security threshold (${rawCompositeScore}% < ${passThreshold}%)`;
       diagnosticExplanation = `BIOMETRIC MISMATCH DETECTED (${similarityScore}%). ${reason}. 12-Layer AI breakdown: Mesh=${dispStructuralScore}%, Proportions=${dispProportionScore}%, Color=${dispColorScore}%, Features=${dispRegionScore}%, Contour=${dispEdgeScore}%, SSIM=${ssimTextureScore}%, Asym=${dispAsymScore}%, Topo=${zDepthTopographyScore}%, EAR/MAR=${dispAspectScore}%, MicroDist=${dispMicroScore}%, Phi=${dispGoldenScore}%, 888DenseVector=${dispDenseScore}%.`;
