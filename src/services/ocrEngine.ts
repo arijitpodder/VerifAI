@@ -1,6 +1,6 @@
 import type { ConsistencyCheckResult, ExtractedFields } from '../types';
 import Tesseract from 'tesseract.js';
-import { autoOrientIdCard } from './faceCropService';
+import { autoOrientIdCard } from './faceCropService.ts';
 
 /**
  * Standard ICAO Doc 9303 MRZ Check Digit calculation (Weights: 7, 3, 1, 7, 3, 1...)
@@ -197,7 +197,35 @@ export function parseDocumentText(rawText: string): ExtractedFields {
   let mrzLine1 = '';
   let mrzLine2 = '';
 
-  // 1. Search for MRZ lines (lines with length >= 28 and at least one '<')
+  // 1. Search for Visual Inspection Zone (VIZ) Name (Passport Surname & Given Names)
+  const isBlacklisted = (str: string) =>
+    /\b(?:PASSPORT|IDENTITY|IDENTIFICATION|NATIONAL|NATIONALITY|NATIONALITE|REPUBLIC|GOVERNMENT|DEPARTMENT|COMMERCIAL|DRIVER|LICENSE|LICENCE|STATE|UNITED|STATES|AMERICA|CARD|AUTHORITY|SIGNATURE|HOLDER|MINISTRY|FEDERAL|OFFICIAL|DATE|BIRTH|EXPIRES|EXPIRY|SEX|GENDER|ISSUE|ISSUED|CLASS|RESTRICTIONS|ENDORSEMENTS|INSTITUTE|TECHNOLOGY|COLLEGE|UNIVERSITY|SCHOOL|STREAM|BRANCH|SCIENCE|ENGINEERING|TECH|CSE|ECE|MECH|CIVIL|IT|EE|BTECH|MTECH|DIPLOMA|DEGREE|PHONE|MOBILE|CONTACT|BLOOD|GROUP|SESSION|ROLL|REGISTRATION|ADMISSION|SEMESTER|FACULTY|STUDENT|EMPLOYEE|ID|NO|NIT|VALID|THRU|BATCH|YEAR|ADDRESS|SIGN|PHOTO|ACADEMIC|NAME|NOM|KOLKATA|BENGAL|INDIA|NADIA|KALYANI|ROAD|AGARPARA|PLACE|TYPE|COUNTRY|CODE)\b/i.test(str);
+
+  const isValidName = (str: string) => {
+    const clean = cleanCandidateName(str);
+    const words = clean.split(/\s+/).filter((w) => w.length >= 2);
+    const hasVowels = words.every((w) => /[AEIOUY]/i.test(w) || /^NG$/i.test(w));
+    return clean.length >= 4 && words.length >= 1 && hasVowels && !isBlacklisted(clean);
+  };
+
+  const extractField = (pattern: RegExp) => {
+    for (let j = 0; j < lines.length; j++) {
+      const l = lines[j];
+      const m = l.match(pattern);
+      if (m && m[1] && isValidName(m[1])) return cleanCandidateName(m[1]);
+      if (pattern.test(l) && lines[j + 1] && isValidName(lines[j + 1])) return cleanCandidateName(lines[j + 1]);
+    }
+    return null;
+  };
+
+  const surnamePart = extractField(/^(?:surname|nom|उपनाम|last\s*name)\s*[:.\s/-]*\s*([A-Za-z\s,.-]{3,40})/i);
+  const givenPart = extractField(/^(?:given\s*names?|pr[ée]noms?|दिया\s*गया\s*नाम|first\s*name)\s*[:.\s/-]*\s*([A-Za-z\s,.-]{3,40})/i);
+
+  if (surnamePart && givenPart) {
+    fullName = `${givenPart} ${surnamePart}`;
+  }
+
+  // 2. Search for MRZ lines (lines with length >= 28 and at least one '<')
   const mrzLines = lines.filter((l) => {
     const clean = l.replace(/[^A-Z0-9<]/gi, '');
     return clean.length >= 28 && clean.includes('<');
@@ -277,7 +305,10 @@ export function parseDocumentText(rawText: string): ExtractedFields {
     }
   }
 
-  // 2. Search visual inspection zone lines (supports both same-line and next-line labels)
+  // 3. Search visual inspection zone lines (College ID, Driver's License, Aadhaar)
+  const studentLabelPattern = /(?:student(?:'s)?\s*name|name\s*of\s*(?:the\s*)?student|candidate(?:'s)?\s*name|name\s*of\s*(?:the\s*)?candidate|card\s*holder(?:\s*name)?|cardholder(?:'s)?(?:\s*name)?|full\s*name|given\s*names?|name)\s*[:.\s-]+\s*([A-Za-z\s,.-]{3,40})/i;
+  const labelOnlyPattern = /^(?:student(?:'s)?\s*name|name\s*of\s*(?:the\s*)?student|candidate(?:'s)?\s*name|name\s*of\s*(?:the\s*)?candidate|card\s*holder(?:\s*name)?|cardholder(?:'s)?(?:\s*name)?|full\s*name|given\s*names?|name)\s*[:.\s-]?$/i;
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const nextLine = lines[i + 1] || '';
@@ -289,38 +320,18 @@ export function parseDocumentText(rawText: string): ExtractedFields {
       documentType = 'PASSPORT';
     }
 
-    const isBlacklisted = (str: string) => /PASSPORT|LICENSE|IDENTITY|STATES|AMERICA|INSTITUTE|TECHNOLOGY|COLLEGE|UNIVERSITY|STREAM|SCIENCE|ENGINEERING|PHONE|MOBILE|BLOOD|SESSION|ROLL|REGISTRATION|NARULA|STUDENT|FACULTY|BATCH|BRANCH|SIGNATURE|CARD|REPUBLIC|GOVERNMENT|NATIONAL|DEPARTMENT/i.test(str);
-    const isValidName = (str: string) => {
-      const clean = cleanCandidateName(str);
-      const words = clean.split(/\s+/).filter((w) => w.length >= 2);
-      const hasVowels = words.every(w => /[AEIOUY]/i.test(w) || /^NG$/i.test(w));
-      return clean.length >= 4 && words.length >= 1 && hasVowels && !isBlacklisted(clean);
-    };
-
-    // Name detection - Prioritize VIZ (Visual Inspection Zone) over MRZ to avoid chevron noise (e.g. KOUSTAVCLI)
-    const extractField = (pattern: RegExp) => {
-      for (let j = 0; j < lines.length; j++) {
-        const l = lines[j];
-        const m = l.match(pattern);
-        if (m && m[1] && isValidName(m[1])) return cleanCandidateName(m[1]);
-        if (pattern.test(l) && lines[j+1] && isValidName(lines[j+1])) return cleanCandidateName(lines[j+1]);
-      }
-      return null;
-    };
-
-    const surnamePart = extractField(/^(?:surname|nom|उपनाम|last\s*name)\s*[:.\s-]*\s*([A-Za-z\s,.-]{3,40})/i);
-    const givenPart = extractField(/^(?:given\s*names?|pr[ée]noms?|दिया\s*गया\s*नाम|first\s*name)\s*[:.\s-]*\s*([A-Za-z\s,.-]{3,40})/i);
-    
-    if (surnamePart && givenPart) {
-      fullName = `${givenPart} ${surnamePart}`;
-    } else {
-      const nameMatch = line.match(/(?:full\s*name|given\s*names?|student\s*name|candidate\s*name|cardholder(?:\s*name)?|surname|nom|name)\s*[:.\s-]+\s*([A-Za-z\s,.-]{3,40})/i);
-
-      if (nameMatch && nameMatch[1] && isValidName(nameMatch[1])) {
-        fullName = cleanCandidateName(nameMatch[1]);
-      } else if (/^(?:full\s*name|surname|given\s*names?|student\s*name|candidate\s*name|cardholder(?:\s*name)?|name|nom)\.?$/i.test(line)) {
-        if (isValidName(nextLine)) {
-          fullName = cleanCandidateName(nextLine);
+    // Name detection from labeled fields (e.g. Student ID cards: "Name: ARIJIT PODDER", "Student Name : ...")
+    if (!fullName) {
+      // Ignore secondary family/institution names
+      const isSecondary = /^(?:father|mother|guardian|parent|college|institute|university|dept|department|school|principal|signatory)/i.test(line);
+      if (!isSecondary) {
+        const nameMatch = line.match(studentLabelPattern);
+        if (nameMatch && nameMatch[1] && isValidName(nameMatch[1])) {
+          fullName = cleanCandidateName(nameMatch[1]);
+        } else if (labelOnlyPattern.test(line)) {
+          if (isValidName(nextLine)) {
+            fullName = cleanCandidateName(nextLine);
+          }
         }
       }
     }
@@ -696,61 +707,95 @@ export function extractNameCandidates(rawText: string): string[] {
     .filter((l) => l.length >= 3);
 
   const candidates: string[] = [];
-  const blacklist = /\b(?:PASSPORT|IDENTITY|IDENTIFICATION|NATIONAL|REPUBLIC|GOVERNMENT|DEPARTMENT|COMMERCIAL|DRIVER|LICENSE|LICENCE|STATE|UNITED|STATES|AMERICA|CARD|AUTHORITY|SIGNATURE|HOLDER|MINISTRY|FEDERAL|OFFICIAL|DATE|BIRTH|EXPIRES|EXPIRY|SEX|GENDER|ISSUE|ISSUED|CLASS|RESTRICTIONS|ENDORSEMENTS|INSTITUTE|TECHNOLOGY|COLLEGE|UNIVERSITY|SCHOOL|STREAM|BRANCH|SCIENCE|ENGINEERING|PHONE|MOBILE|CONTACT|BLOOD|GROUP|SESSION|ROLL|REGISTRATION|ADMISSION|SEMESTER|FACULTY|STUDENT|EMPLOYEE|ID|NO|NIT|VALID|THRU|BATCH|YEAR|ADDRESS|SIGN|PHOTO|ACADEMIC|NAME|NOM)\b/i;
+  const blacklist = /\b(?:PASSPORT|IDENTITY|IDENTIFICATION|NATIONAL|NATIONALITY|NATIONALITE|REPUBLIC|GOVERNMENT|DEPARTMENT|COMMERCIAL|DRIVER|LICENSE|LICENCE|STATE|UNITED|STATES|AMERICA|CARD|AUTHORITY|SIGNATURE|HOLDER|MINISTRY|FEDERAL|OFFICIAL|DATE|BIRTH|EXPIRES|EXPIRY|SEX|GENDER|ISSUE|ISSUED|CLASS|RESTRICTIONS|ENDORSEMENTS|INSTITUTE|TECHNOLOGY|COLLEGE|UNIVERSITY|SCHOOL|STREAM|BRANCH|SCIENCE|ENGINEERING|TECH|CSE|ECE|MECH|CIVIL|IT|EE|BTECH|MTECH|DIPLOMA|DEGREE|PHONE|MOBILE|CONTACT|BLOOD|GROUP|SESSION|ROLL|REGISTRATION|ADMISSION|SEMESTER|FACULTY|STUDENT|EMPLOYEE|ID|NO|NIT|VALID|THRU|BATCH|YEAR|ADDRESS|SIGN|PHOTO|ACADEMIC|NAME|NOM|KOLKATA|BENGAL|INDIA|NADIA|KALYANI|ROAD|AGARPARA|PLACE|TYPE|COUNTRY|CODE)\b/i;
 
-  // 1. Check for labeled names first (Highest Confidence) e.g. "Name: ARIJIT PODDER", "Name : JOHN DOE", "Name ARIJIT PODDER"
+  const isValidName = (str: string) => {
+    const clean = cleanCandidateName(str);
+    const words = clean.split(/\s+/).filter((w) => w.length >= 2);
+    const hasVowels = words.every((w) => /[AEIOUY]/i.test(w) || /^NG$/i.test(w));
+    return clean.length >= 4 && words.length >= 1 && hasVowels && !blacklist.test(clean);
+  };
+
+  // 1. Check for Passport VIZ fields (Surname & Given Names)
+  const extractField = (pattern: RegExp) => {
+    for (let j = 0; j < lines.length; j++) {
+      const l = lines[j];
+      const m = l.match(pattern);
+      if (m && m[1] && isValidName(m[1])) return cleanCandidateName(m[1]);
+      if (pattern.test(l) && lines[j + 1] && isValidName(lines[j + 1])) return cleanCandidateName(lines[j + 1]);
+    }
+    return null;
+  };
+  const surnamePart = extractField(/^(?:surname|nom|उपनाम|last\s*name)\s*[:.\s/-]*\s*([A-Za-z\s,.-]{3,40})/i);
+  const givenPart = extractField(/^(?:given\s*names?|pr[ée]noms?|दिया\s*गया\s*नाम|first\s*name)\s*[:.\s/-]*\s*([A-Za-z\s,.-]{3,40})/i);
+  if (surnamePart && givenPart) {
+    const vizFull = `${givenPart} ${surnamePart}`;
+    if (!candidates.includes(vizFull)) {
+      candidates.push(vizFull);
+    }
+  }
+
+  // 2. Check for labeled names (Highest Confidence) e.g. "Name: ARIJIT PODDER", "Student Name : KOUSHIK BANERJEE"
+  const studentLabelPattern = /(?:student(?:'s)?\s*name|name\s*of\s*(?:the\s*)?student|candidate(?:'s)?\s*name|name\s*of\s*(?:the\s*)?candidate|card\s*holder(?:\s*name)?|cardholder(?:'s)?(?:\s*name)?|full\s*name|given\s*names?|name)\s*[:.\s-]+\s*([A-Za-z\s,.-]{3,40})/i;
+  const labelOnlyPattern = /^(?:student(?:'s)?\s*name|name\s*of\s*(?:the\s*)?student|candidate(?:'s)?\s*name|name\s*of\s*(?:the\s*)?candidate|card\s*holder(?:\s*name)?|cardholder(?:'s)?(?:\s*name)?|full\s*name|given\s*names?|name)\s*[:.\s-]?$/i;
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    const nextLine = lines[i + 1] || '';
+    // Ignore secondary family/institution names
+    if (/^(?:father|mother|guardian|parent|college|institute|university|dept|department|school|principal|signatory)/i.test(line)) continue;
 
     // Same-line labeled name
-    const labeledMatch = line.match(/(?:full\s*name|given\s*names?|student\s*name|candidate\s*name|cardholder(?:\s*name)?|surname|name|nom)\s*[:.\s-]+\s*([A-Za-z\s,.-]{3,35})/i);
+    const labeledMatch = line.match(studentLabelPattern);
     if (labeledMatch && labeledMatch[1]) {
       const clean = cleanCandidateName(labeledMatch[1]);
       const words = clean.split(/\s+/).filter((w) => w.length >= 2);
       if (clean.length >= 5 && words.length >= 2 && words.every((w) => !blacklist.test(w)) && !candidates.includes(clean)) {
-        candidates.unshift(clean); // Priority 1
+        candidates.push(clean);
       }
     }
 
     // Two-line labeled name (e.g. Line 1: "Name:", Line 2: "ARIJIT PODDER")
-    if (/^(?:full\s*name|student\s*name|candidate\s*name|cardholder(?:\s*name)?|surname|name|nom)\s*[:.]?$/i.test(line)) {
-      const cleanNext = cleanCandidateName(nextLine);
+    if (labelOnlyPattern.test(line) && lines[i + 1]) {
+      const cleanNext = cleanCandidateName(lines[i + 1]);
       const words = cleanNext.split(/\s+/).filter((w) => w.length >= 2);
       if (cleanNext.length >= 5 && words.length >= 2 && words.every((w) => !blacklist.test(w)) && !candidates.includes(cleanNext)) {
-        candidates.unshift(cleanNext);
+        candidates.push(cleanNext);
       }
     }
   }
 
-  // 2. Check MRZ lines for passport names (e.g. P<USA<CONNOR<<SARAH<JEAN<<<<<<<<<<<< or P<INDSAHA<<KOUSTAV)
+  // 3. Check MRZ lines for passport names (STRICT: length >= 28 and must contain '<' to avoid matching words like 'PASSPORT')
   for (const line of lines) {
     const cleanLine = line.replace(/[^A-Z0-9<]/gi, '');
+    if (cleanLine.length < 28 || !cleanLine.includes('<')) continue;
     const mrzMatch = cleanLine.match(/^P[<A-Z0-9\s]?([A-Z]{3})\s*([A-Z<]+)/i);
     if (mrzMatch && mrzMatch[2]) {
       const parts = mrzMatch[2].split('<<');
+      const cleanToken = (t: string) => t.replace(/</g, ' ').replace(/[CLIKE\s]+$/i, '').trim();
       if (parts.length >= 2) {
-        const surname = parts[0].replace(/</g, ' ').trim();
-        const given = parts[1].replace(/</g, ' ').trim();
+        const surname = cleanToken(parts[0]);
+        const given = cleanToken(parts[1]);
         const full = cleanCandidateName(`${given} ${surname}`);
         if (full && !candidates.includes(full)) {
-          candidates.unshift(full);
+          candidates.push(full);
         }
       } else if (parts[0]) {
-        const full = cleanCandidateName(parts[0].replace(/</g, ' ').trim());
+        const full = cleanCandidateName(cleanToken(parts[0]));
         if (full && !candidates.includes(full)) {
-          candidates.unshift(full);
+          candidates.push(full);
         }
       }
     }
   }
 
-  // 3. Lines that look like genuine person names (2 to 4 words, alphabetic only, no single-letter garbage like "P OI")
-  const validCandidates: { name: string; score: number }[] = candidates.map(c => ({ name: c, score: 900 })); // Previously added MRZ/Labeled are high confidence
+  // 4. Lines that look like genuine person names (2 to 4 words, alphabetic only, no single-letter garbage like "BI CD")
+  const validCandidates: { name: string; score: number }[] = candidates.map((c) => ({ name: c, score: 900 }));
   
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.includes('<')) continue; // Skip MRZ lines
     if (/\d/.test(line)) continue; // Person names never contain numbers (filters addresses, phones, sessions)
-    if (!blacklist.test(line) && !/DUMDUM|KOLKATA|BENGAL|DELHI|MUMBAI|INDIA/i.test(line)) {
+    if (!blacklist.test(line)) {
       const clean = cleanCandidateName(line);
       const words = clean.split(/\s+/);
       const validWords = words.filter((w) => w.length >= 3 || ['MD', 'SK', 'DR', 'MR'].includes(w));
@@ -761,13 +806,14 @@ export function extractNameCandidates(rawText: string): string[] {
         validWords.length >= 2 &&
         words.length <= 4 &&
         words.every((w) => !blacklist.test(w)) &&
-        !validCandidates.some(c => c.name === clean)
+        !validCandidates.some((c) => c.name === clean)
       ) {
         let score = 500;
-        const hasVowels = words.every(w => /[AEIOUY]/i.test(w) || /^NG$/i.test(w));
+        const hasVowels = words.every((w) => /[AEIOUY]/i.test(w) || /^NG$/i.test(w));
         if (hasVowels) score += 100;
-        if (words.some(w => w.length >= 5)) score += 100; // Real names usually have at least one long word
-        if (words.some(w => w.length <= 2 && !['MD', 'SK', 'DR', 'MR'].includes(w))) score -= 300; // Penalize "BI CD" style noise
+        if (words.some((w) => w.length >= 4)) score += 100; // Real names usually have at least one long word
+        if (words.some((w) => w.length <= 2 && !['MD', 'SK', 'DR', 'MR'].includes(w))) score -= 300; // Penalize "BI CD" style noise
+        if (i >= 1 && i <= 6) score += 150; // Priority for lines in upper/middle card
         
         if (score > 400) {
           validCandidates.push({ name: clean, score });
@@ -779,5 +825,5 @@ export function extractNameCandidates(rawText: string): string[] {
   // Sort by confidence score
   validCandidates.sort((a, b) => b.score - a.score);
 
-  return validCandidates.map(c => c.name).slice(0, 5);
+  return validCandidates.map((c) => c.name).slice(0, 5);
 }

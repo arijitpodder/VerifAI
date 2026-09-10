@@ -15,6 +15,8 @@ export interface DetectedFaceBox {
 }
 
 
+import { getFaceLandmarker } from './biometricsEngine.ts';
+
 /**
  * Automatically detects the portrait photo region on an ID card image
  */
@@ -32,36 +34,52 @@ export async function detectIdPhotoRegion(
 
         let detectedBox: DetectedFaceBox | null = null;
 
-        // 1. Try Native Browser FaceDetector (Chromium Shape Detection API if enabled)
-        if (typeof window !== 'undefined' && 'FaceDetector' in window) {
-          try {
-            const detector = new (window as any).FaceDetector({ fastMode: false, maxDetectedFaces: 1 });
-            const faces = await detector.detect(img);
-            if (faces && faces.length > 0) {
-              const face = faces[0].boundingBox;
-              const padX = face.width * 0.25;
-              const padY = face.height * 0.35;
-              const px = Math.max(0, face.x - padX);
-              const py = Math.max(0, face.y - padY * 0.8);
-              const pw = Math.min(width - px, face.width + padX * 2);
-              const ph = Math.min(height - py, face.height + padY * 1.8);
-
-              detectedBox = {
-                x: Math.round((px / width) * 100),
-                y: Math.round((py / height) * 100),
-                width: Math.round((pw / width) * 100),
-                height: Math.round((ph / height) * 100),
-                confidence: 98,
-                source: 'NATIVE_AI_DETECTOR',
-                label: 'AI Neural Face Lock'
-              };
+        // 1. MediaPipe AI Neural Face Detection across full card image (highest accuracy)
+        try {
+          const landmarker = await getFaceLandmarker();
+          const result = landmarker.detect(img);
+          if (result.faceLandmarks && result.faceLandmarks.length > 0) {
+            const marks = result.faceLandmarks[0];
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            for (const m of marks) {
+              const px = m.x * width;
+              const py = m.y * height;
+              if (px < minX) minX = px;
+              if (py < minY) minY = py;
+              if (px > maxX) maxX = px;
+              if (py > maxY) maxY = py;
             }
-          } catch (e) {
-            console.warn('Native FaceDetector unavailable, using intelligent chroma locator:', e);
+            const faceW = maxX - minX;
+            const faceH = maxY - minY;
+            // Standard ID portrait framing (4:5 ratio with headroom and shoulders)
+            const padX = faceW * 0.28;
+            const padTop = faceH * 0.35;
+            const padBottom = faceH * 0.45;
+            const px = Math.max(0, minX - padX);
+            const py = Math.max(0, minY - padTop);
+            const pw = Math.min(width - px, faceW + padX * 2);
+            const ph = Math.min(height - py, faceH + padTop + padBottom);
+
+            const pctW = Math.round((pw / width) * 100);
+            const pctH = Math.round((ph / height) * 100);
+            const pctX = Math.max(0, Math.min(100 - pctW, Math.round((px / width) * 100)));
+            const pctY = Math.max(0, Math.min(100 - pctH, Math.round((py / height) * 100)));
+
+            detectedBox = {
+              x: pctX,
+              y: pctY,
+              width: pctW,
+              height: pctH,
+              confidence: 99,
+              source: 'NATIVE_AI_DETECTOR',
+              label: 'AI Neural Face Lock'
+            };
           }
+        } catch (mpErr) {
+          console.warn('MediaPipe ID card face detection fallback:', mpErr);
         }
 
-        // 2. Multi-Zone Intelligent Skin Chroma Scanner
+        // 2. Multi-Zone Intelligent Skin Chroma Scanner (Fallback if MediaPipe was unable to run)
         if (!detectedBox) {
           detectedBox = scanCardForPortraitZone(img, width, height);
         }
@@ -325,8 +343,8 @@ function scanCardForPortraitZone(
     };
   }
 
-  // Fallback preset (Left Portrait is standard for most Passports and DLs)
-  return PRESET_BOXES.LEFT_PORTRAIT;
+  // Fallback preset: Vertical cards/student badges default to RIGHT_BADGE, horizontal cards to LEFT_PORTRAIT
+  return sampleH >= sampleW * 1.05 ? PRESET_BOXES.RIGHT_BADGE : PRESET_BOXES.LEFT_PORTRAIT;
 }
 
 /**

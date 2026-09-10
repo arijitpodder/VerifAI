@@ -219,13 +219,23 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
       try {
         const ocrResult = await runRealOcr(uri);
         const candidates = extractNameCandidates(ocrResult.rawText);
-        if (candidates.length > 0) {
-          setNameCandidates(candidates);
-          setEnteredName(candidates[0]);
-        } else if (ocrResult.fields.fullName && ocrResult.fields.fullName !== 'NOT_DETECTED') {
-          const clean = cleanCandidateName(ocrResult.fields.fullName);
-          setNameCandidates([clean]);
-          setEnteredName(clean);
+        const primaryOcrName = (ocrResult.fields.fullName && ocrResult.fields.fullName !== 'NOT_DETECTED')
+          ? cleanCandidateName(ocrResult.fields.fullName)
+          : '';
+
+        const allCandidates: string[] = [];
+        if (primaryOcrName && !allCandidates.includes(primaryOcrName)) {
+          allCandidates.push(primaryOcrName);
+        }
+        for (const c of candidates) {
+          if (c && !allCandidates.includes(c)) {
+            allCandidates.push(c);
+          }
+        }
+
+        if (allCandidates.length > 0) {
+          setNameCandidates(allCandidates);
+          setEnteredName(allCandidates[0]);
         } else {
           setNameCandidates([]);
           setEnteredName('');
@@ -265,13 +275,23 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
       try {
         const ocrResult = await runRealOcr(rotated);
         const candidates = extractNameCandidates(ocrResult.rawText);
-        if (candidates.length > 0) {
-          setNameCandidates(candidates);
-          setEnteredName(candidates[0]);
-        } else if (ocrResult.fields.fullName && ocrResult.fields.fullName !== 'NOT_DETECTED') {
-          const clean = cleanCandidateName(ocrResult.fields.fullName);
-          setNameCandidates([clean]);
-          setEnteredName(clean);
+        const primaryOcrName = (ocrResult.fields.fullName && ocrResult.fields.fullName !== 'NOT_DETECTED')
+          ? cleanCandidateName(ocrResult.fields.fullName)
+          : '';
+
+        const allCandidates: string[] = [];
+        if (primaryOcrName && !allCandidates.includes(primaryOcrName)) {
+          allCandidates.push(primaryOcrName);
+        }
+        for (const c of candidates) {
+          if (c && !allCandidates.includes(c)) {
+            allCandidates.push(c);
+          }
+        }
+
+        if (allCandidates.length > 0) {
+          setNameCandidates(allCandidates);
+          setEnteredName(allCandidates[0]);
         }
       } catch (err) {
         console.warn('OCR error during rotation:', err);
@@ -640,7 +660,7 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
     setNameMatchScore(nScore);
 
     // 3. Final Decision: Face Verification
-    const facePassed = comp.matchPassed && comp.similarityScore >= 75;
+    const facePassed = comp.matchPassed && comp.similarityScore >= 70;
     setVerificationPassed(facePassed);
 
     // Generate cryptographic audit hash
