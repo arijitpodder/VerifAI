@@ -660,7 +660,7 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
     setNameMatchScore(nScore);
 
     // 3. Final Decision: Face Verification
-    const facePassed = comp.matchPassed && comp.similarityScore >= 66;
+    const facePassed = comp.matchPassed && comp.similarityScore >= 70;
     setVerificationPassed(facePassed);
 
     // Generate cryptographic audit hash
