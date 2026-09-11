@@ -24,11 +24,18 @@ export const CyberBootIntro: React.FC<CyberBootIntroProps> = ({ onComplete }) =>
   const [isPlayingAudio, setIsPlayingAudio] = useState(dhurandharAudio.isMusicPlaying());
   const [progress, setProgress] = useState(0);
 
+  const getAssetPath = (path: string) => {
+    const base = (import.meta.env && import.meta.env.BASE_URL) ? import.meta.env.BASE_URL : './';
+    const cleanBase = base.endsWith('/') ? base : `${base}/`;
+    const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+    return `${cleanBase}${cleanPath}`;
+  };
+
   // 🇮🇳 5 Iconic Development Scenes of India
   const scenes: VideoScene[] = [
     {
       id: 'tiger',
-      image: '/images/viksit_bharat_tiger.jpg',
+      image: getAssetPath('images/viksit_bharat_tiger.jpg'),
       title: 'ROYAL BENGAL TIGER OF INDIA',
       badge: 'NATIONAL ANIMAL & IDENTITY',
       subtitle: 'Symbol of sovereign strength, quantum resilience & national pride.',
@@ -37,7 +44,7 @@ export const CyberBootIntro: React.FC<CyberBootIntroProps> = ({ onComplete }) =>
     },
     {
       id: 'fighter_jets',
-      image: '/images/indian_fighter_jets.jpg',
+      image: getAssetPath('images/indian_fighter_jets.jpg'),
       title: 'INDIAN AIR FORCE FIGHTER JETS',
       badge: 'SUPERSONIC DEFENSE SUPREMACY',
       subtitle: 'Indigenous Tejas & Rafale soaring at supersonic speeds with sonic boom condensation.',
@@ -46,7 +53,7 @@ export const CyberBootIntro: React.FC<CyberBootIntroProps> = ({ onComplete }) =>
     },
     {
       id: 'vande_bharat',
-      image: '/images/vande_bharat_future.jpg',
+      image: getAssetPath('images/vande_bharat_future.jpg'),
       title: 'VANDE BHARAT & BULLET RAIL',
       badge: 'HIGH-SPEED INDIGENOUS TRANSIT',
       subtitle: 'Next-generation high-speed viaduct corridors connecting a developed Viksit Bharat.',
@@ -55,7 +62,7 @@ export const CyberBootIntro: React.FC<CyberBootIntroProps> = ({ onComplete }) =>
     },
     {
       id: 'statue_of_unity',
-      image: '/images/statue_of_unity.jpg',
+      image: getAssetPath('images/statue_of_unity.jpg'),
       title: 'STATUE OF UNITY (182 METERS)',
       badge: 'WORLD’S TALLEST STATUE',
       subtitle: 'The world’s tallest statue illuminated by tricolor laser searchlights over Narmada.',
@@ -64,7 +71,7 @@ export const CyberBootIntro: React.FC<CyberBootIntroProps> = ({ onComplete }) =>
     },
     {
       id: 'isro_rocket',
-      image: '/images/isro_space_rocket.jpg',
+      image: getAssetPath('images/isro_space_rocket.jpg'),
       title: 'ISRO SPACE EXPLORATION & GAGANYAAN',
       badge: 'DEEP SPACE SUPREMACY',
       subtitle: 'Chandrayaan lunar exploration & Gaganyaan human spaceflight blasting into the cosmos.',

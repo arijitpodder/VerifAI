@@ -25,7 +25,9 @@ class DhurandharMusicEngine {
     if (typeof window !== 'undefined') {
       // Setup HTML5 audio fallback if user places dhurandhar.mp3 in public/audio/
       try {
-        const audio = new Audio('/audio/dhurandhar.mp3');
+        const base = (import.meta.env && import.meta.env.BASE_URL) ? import.meta.env.BASE_URL : './';
+        const cleanBase = base.endsWith('/') ? base : `${base}/`;
+        const audio = new Audio(`${cleanBase}audio/dhurandhar.mp3`);
         audio.loop = true;
         audio.volume = this.currentVolume;
         this.customAudio = audio;
