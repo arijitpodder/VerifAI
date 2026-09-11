@@ -333,3 +333,157 @@ body {
     filter: drop-shadow(0 0 20px rgba(16, 185, 129, 0.8));
   }
 }
+
+@keyframes scan {
+  0% {
+    top: 0%;
+    opacity: 0.9;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    top: 100%;
+    opacity: 0.9;
+  }
+}
+
+@keyframes holographicShimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.cyber-card {
+  position: relative;
+  background: rgba(11, 17, 32, 0.85);
+  border: 1px solid rgba(6, 182, 212, 0.25);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5), inset 0 0 20px rgba(6, 182, 212, 0.05);
+}
+
+.cyber-card:hover {
+  border-color: rgba(6, 182, 212, 0.5);
+  box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.6), 0 0 25px rgba(6, 182, 212, 0.2);
+}
+
+.synaptic-border {
+  position: relative;
+}
+
+.synaptic-border::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(90deg, #06b6d4, #a855f7, #10b981, #06b6d4);
+  background-size: 300% 300%;
+  animation: holographicShimmer 6s linear infinite;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Dedicated Laser Matrix Scanner */
+.laser-scan-container {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: inherit;
+  z-index: 20;
+}
+
+.laser-scan-beam {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent 0%, #00f2fe 30%, #ffffff 50%, #00f2fe 70%, transparent 100%);
+  box-shadow: 0 0 18px #00f2fe, 0 0 35px rgba(0, 242, 254, 0.6);
+  animation: scan 2s linear infinite;
+}
+
+.laser-grid-overlay {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, rgba(0, 242, 254, 0.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 242, 254, 0.08) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* Robotic HUD Reticle Animations */
+@keyframes spinClockwise {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes spinCounterClockwise {
+  from { transform: rotate(360deg); }
+  to { transform: rotate(0deg); }
+}
+
+.reticle-spin-cw {
+  animation: spinClockwise 12s linear infinite;
+}
+
+.reticle-spin-ccw {
+  animation: spinCounterClockwise 8s linear infinite;
+}
+
+/* Indian Tricolor Glowing Shimmer */
+@keyframes tirangaWave {
+  0% {
+    filter: drop-shadow(0 0 15px rgba(255, 153, 51, 0.6)) drop-shadow(0 0 25px rgba(19, 136, 8, 0.4));
+  }
+  50% {
+    filter: drop-shadow(0 0 30px rgba(255, 153, 51, 0.8)) drop-shadow(0 0 40px rgba(0, 0, 128, 0.7));
+  }
+  100% {
+    filter: drop-shadow(0 0 15px rgba(255, 153, 51, 0.6)) drop-shadow(0 0 25px rgba(19, 136, 8, 0.4));
+  }
+}
+
+.tiranga-glow {
+  animation: tirangaWave 3s ease-in-out infinite;
+}
+
+/* Rapid Scene Flash & Quick Cuts */
+@keyframes quickSceneFlash {
+  0% {
+    opacity: 0.7;
+    transform: scale(1.02);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
+.quick-scene-flash {
+  animation: quickSceneFlash 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes sceneTextSnap {
+  0% {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.scene-text-snap {
+  animation: sceneTextSnap 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+
+

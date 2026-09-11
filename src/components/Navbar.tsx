@@ -1,5 +1,6 @@
-import React from 'react';
-import { ShieldCheck, FileText, Layers, Scan, UserCheck } from 'lucide-react';
+import { ShieldCheck, FileText, Layers, Scan, UserCheck, Sparkles, Zap } from 'lucide-react';
+import type { CanvasMode } from './HiggsfieldMotionCanvas';
+import { soundEffects } from '../services/soundEffects';
 
 export type AppMode = 'PIPELINE' | 'ID_LAB' | 'FACE_LAB' | 'ID_FACE_MATCH';
 
@@ -9,6 +10,9 @@ interface NavbarProps {
   auditCount: number;
   activeMode: AppMode;
   onChangeMode: (mode: AppMode) => void;
+  motionMode: CanvasMode;
+  onChangeMotionMode: (mode: CanvasMode) => void;
+  onReplayBoot: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -16,7 +20,10 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenAuditLog,
   auditCount,
   activeMode,
-  onChangeMode
+  onChangeMode,
+  motionMode,
+  onChangeMotionMode,
+  onReplayBoot
 }) => {
   return (
     <header style={{
@@ -64,11 +71,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                 VERIFAI
               </span>
               <span className="badge badge-cyan" style={{ fontSize: '0.62rem', padding: '0.12rem 0.45rem' }}>
-                v2.5 PRO
+                v4.8 QUANTUM
               </span>
             </div>
             <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', margin: 0 }}>
-              AI Multi-Layer Identity &amp; Forensics
+              Higgsfield Neural Biometrics &amp; Forensics
             </p>
           </div>
         </div>
@@ -113,7 +120,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               fontSize: '0.62rem',
               fontWeight: 800
             }}>
-              STAR
+              PRO
             </span>
           </button>
 
@@ -181,8 +188,71 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
         </div>
 
-        {/* Header Tools */}
+        {/* Motion & Theme Selector */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.4rem',
+          background: 'rgba(15, 23, 42, 0.7)',
+          padding: '0.25rem 0.5rem',
+          borderRadius: 'var(--radius-md)',
+          border: '1px solid rgba(6, 182, 212, 0.2)'
+        }}>
+          <Sparkles size={13} color="#06b6d4" />
+          <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 600 }}>Motion:</span>
+          <select
+            value={motionMode}
+            onChange={(e) => {
+              const m = e.target.value as CanvasMode;
+              onChangeMotionMode(m);
+              soundEffects.playLockOn();
+              window.dispatchEvent(new CustomEvent('higgsfield-pulse', {
+                detail: { color: m === 'NATURE' ? '#10b981' : m === 'CYBER' ? '#8b5cf6' : '#06b6d4' }
+              }));
+            }}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: '#38bdf8',
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              fontFamily: 'var(--font-mono)',
+              outline: 'none',
+              cursor: 'pointer'
+            }}
+          >
+            <option value="TIRANGA" style={{ background: '#090d16', color: '#ff9933' }}>🇮🇳 Indian Tiranga Patriotic</option>
+            <option value="SYNTHESIS" style={{ background: '#090d16', color: '#38bdf8' }}>Quantum Synthesis (All)</option>
+            <option value="QUANTUM" style={{ background: '#090d16', color: '#06b6d4' }}>Higgsfield Quantum</option>
+            <option value="NATURE" style={{ background: '#090d16', color: '#10b981' }}>Bioluminescent Nature</option>
+            <option value="CYBER" style={{ background: '#090d16', color: '#a855f7' }}>Cyber Perspective Grid</option>
+          </select>
+        </div>
+
+        {/* Header Tools & Replay Boot */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <button
+            onClick={() => {
+              soundEffects.playTirangaHeroicTheme();
+              onReplayBoot();
+            }}
+            className="btn btn-secondary"
+            title="Replay Viksit Bharat & Royal Bengal Tiger Opening"
+            style={{
+              padding: '0.4rem 0.75rem',
+              fontSize: '0.76rem',
+              borderColor: 'rgba(255, 153, 51, 0.6)',
+              background: 'linear-gradient(135deg, rgba(255, 153, 51, 0.15) 0%, rgba(19, 136, 8, 0.15) 100%)',
+              color: '#ff9933',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.35rem'
+            }}
+          >
+            <Zap size={13} color="#ff9933" />
+            <span>🇮🇳 Viksit Bharat Boot</span>
+          </button>
+
           <button
             onClick={onOpenAuditLog}
             className="btn btn-secondary"

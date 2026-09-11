@@ -40,6 +40,7 @@ import { runRealOcr, extractNameCandidates, cleanCandidateName } from '../servic
 import { soundEffects } from '../services/soundEffects';
 import { rotateImageDataUri } from '../services/imageRotationService';
 import { FaceLandmarkOverlay } from './FaceLandmarkOverlay';
+import { LaserScanOverlay, RoboticCameraHud, SynapticMatchBridge } from './CyberFunctionOverlay';
 
 type MatchStep = 'STEP1_CARD' | 'STEP2_WEBCAM' | 'STEP3_RESULT';
 
@@ -187,7 +188,8 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
 
   // Handle Custom ID File Upload with Auto-Orientation Detection
   const handleFileUpload = async (file: File) => {
-    soundEffects.playClick();
+    soundEffects.playMatrixSweep();
+    window.dispatchEvent(new CustomEvent('higgsfield-pulse', { detail: { color: '#06b6d4' } }));
     setIsExtractingOcr(true);
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -246,7 +248,7 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
       }
 
       setIsExtractingOcr(false);
-      soundEffects.playScanLaser();
+      soundEffects.playLockOn();
     };
     reader.readAsDataURL(file);
   };
@@ -511,14 +513,15 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
 
   // Move to Step 2: Webcam Biometrics
   const handleProceedToWebcam = () => {
-    soundEffects.playClick();
+    soundEffects.playRoboticServo();
+    window.dispatchEvent(new CustomEvent('higgsfield-pulse', { detail: { color: '#06b6d4' } }));
     setCurrentStep('STEP2_WEBCAM');
     startWebcam();
   };
 
   // Countdown and capture live photo from webcam
   const handleCaptureCountdown = () => {
-    soundEffects.playClick();
+    soundEffects.playLockOn();
     setCountdown(3);
     soundEffects.playBeep(false);
 
@@ -529,6 +532,7 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
           soundEffects.playBeep(true);
           setTimeout(() => {
             soundEffects.playCameraShutter();
+            window.dispatchEvent(new CustomEvent('higgsfield-pulse', { detail: { color: '#10b981' } }));
             triggerLiveCapture();
           }, 180);
           return null;
@@ -628,7 +632,7 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
   const runFinalVerification = async (scannedPhoto: string, livePhoto: string) => {
     setCurrentStep('STEP3_RESULT');
     setIsAnalyzing(true);
-    soundEffects.playScanLaser();
+    soundEffects.playQuantumHum();
 
     // 1. Authentic biometric cross-correlation
     const comp = await computeAuthenticFaceSimilarity(scannedPhoto, livePhoto);
@@ -686,6 +690,10 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
 
         if (facePassed) {
           soundEffects.playSuccessFanfare();
+          setTimeout(() => {
+            soundEffects.playNatureChime();
+          }, 350);
+          window.dispatchEvent(new CustomEvent('higgsfield-pulse', { detail: { color: '#10b981' } }));
           try {
             confetti({
               particleCount: 120,
@@ -698,6 +706,7 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
           }
         } else {
           soundEffects.playMismatchAlert();
+          window.dispatchEvent(new CustomEvent('higgsfield-pulse', { detail: { color: '#ef4444' } }));
         }
       }
     }, stepTime);
@@ -1177,6 +1186,9 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
                 style={{ width: '100%', height: 'auto', display: 'block', pointerEvents: 'none' }}
               />
 
+              {/* Holographic Laser Scan Matrix Overlay */}
+              <LaserScanOverlay active={isExtractingOcr} label="OPTICAL MATRIX OCR SCAN" />
+
               {/* Quick Floating Rotate & Flip Overlay on Card */}
               <div style={{
                 position: 'absolute',
@@ -1589,6 +1601,9 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
                 }}
               />
 
+              {/* Robotic AI Biometric HUD Reticle */}
+              <RoboticCameraHud isLocked={countdown !== null} />
+
               {/* Sci-Fi Biometric Alignment Oval */}
               <div style={{
                 position: 'absolute',
@@ -1921,6 +1936,9 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
               </button>
             </div>
           )}
+
+          {/* Quantum Synaptic Biometric Bridge Animation */}
+          <SynapticMatchBridge isMatching={isAnalyzing} />
 
           {/* Side-by-Side Face Comparison Grid with Landmark Overlays */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: '1.5rem', alignItems: 'center' }}>

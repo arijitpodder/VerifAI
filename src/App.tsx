@@ -33,11 +33,19 @@ import { AuditLogModal } from './components/AuditLogModal';
 import { IdVerificationLab } from './components/IdVerificationLab';
 import { FaceVerificationLab } from './components/FaceVerificationLab';
 import { IdFaceMatchLab } from './components/IdFaceMatchLab';
+import { HiggsfieldMotionCanvas } from './components/HiggsfieldMotionCanvas';
+import type { CanvasMode } from './components/HiggsfieldMotionCanvas';
+import { CyberBootIntro } from './components/CyberBootIntro';
+import { DhurandharMusicPlayer } from './components/DhurandharMusicPlayer';
 import { RefreshCw } from 'lucide-react';
 
 export const App: React.FC = () => {
   // Application Mode: 'PIPELINE' | 'ID_LAB' | 'FACE_LAB' | 'ID_FACE_MATCH'
   const [appMode, setAppMode] = useState<AppMode>('ID_FACE_MATCH');
+
+  // Futuristic Motion & Boot Intro States
+  const [showBootIntro, setShowBootIntro] = useState<boolean>(true);
+  const [motionMode, setMotionMode] = useState<CanvasMode>('TIRANGA');
 
   // Active workflow step: 1 - 6
   const [currentStep, setCurrentStep] = useState<number>(1);
@@ -468,14 +476,25 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      {/* Navbar with 3-Mode Switcher */}
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+      {/* Hyper-Futuristic Generative Motion Canvas */}
+      <HiggsfieldMotionCanvas mode={motionMode} />
+
+      {/* Cinematic Cyber Boot Intro Sequence */}
+      {showBootIntro && (
+        <CyberBootIntro onComplete={() => setShowBootIntro(false)} />
+      )}
+
+      {/* Navbar with 3-Mode Switcher & Motion Controller */}
       <Navbar
         onOpenArchitecture={() => setIsArchitectureModalOpen(true)}
         onOpenAuditLog={() => setIsAuditLogModalOpen(true)}
         auditCount={auditLogs.length}
         activeMode={appMode}
         onChangeMode={(m) => setAppMode(m)}
+        motionMode={motionMode}
+        onChangeMotionMode={setMotionMode}
+        onReplayBoot={() => setShowBootIntro(true)}
       />
 
       {/* Main Content Area */}
@@ -708,6 +727,9 @@ export const App: React.FC = () => {
           </div>
         </div>
       </footer>
+
+      {/* Persistent Viral Dhurandhar: Jaan Se Guzarte Hai Music Player */}
+      <DhurandharMusicPlayer />
     </div>
   );
 };
