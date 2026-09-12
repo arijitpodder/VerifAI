@@ -122,11 +122,34 @@ export const DhurandharMusicPlayer: React.FC = () => {
             letterSpacing: '0.05em',
             boxShadow: isPlaying ? '0 0 12px rgba(16, 185, 129, 0.5)' : '0 0 12px rgba(255, 153, 51, 0.5)'
           }}
-          title={isPlaying ? 'Pause Audio' : 'Play Audio'}
+          title={isPlaying ? 'Pause Audio (Get Ready Dhurandhar)' : 'Play Audio (Get Ready Dhurandhar)'}
         >
           {isPlaying ? <Pause size={13} fill="#ffffff" /> : <Play size={13} fill="#ffffff" />}
           <span>{isPlaying ? 'PAUSE' : 'PLAY'}</span>
         </button>
+
+        {/* Track Title Indicator */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          fontSize: '10px',
+          fontWeight: 800,
+          letterSpacing: '0.06em',
+          color: '#ff9933',
+          textShadow: '0 0 10px rgba(255, 153, 51, 0.4)',
+          userSelect: 'none'
+        }}>
+          <span style={{
+            display: 'inline-block',
+            width: 6,
+            height: 6,
+            borderRadius: '50%',
+            backgroundColor: isPlaying ? '#10b981' : '#f59e0b',
+            boxShadow: isPlaying ? '0 0 8px #10b981' : 'none'
+          }} />
+          <span>GET READY DHURANDHAR</span>
+        </div>
 
         {/* Volume Level Slider */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>

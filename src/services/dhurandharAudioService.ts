@@ -1,11 +1,7 @@
 /**
- * Dhurandhar: The Revenge — "Jaan Se Guzarte Hai" Viral Audio Engine
+ * Dhurandhar: The Revenge — "Get Ready Dhurandhar" Title Track Audio Engine
  * Features:
- * 1. Full viral song synthesizer:
- *    - Intro vocal formant swell ("Jaan Se Guzarte Hai...")
- *    - Heavy 808 sub-bass drop & rhythmic battle percussion
- *    - Blaring Dhurandhar heroic action brass hook
- *    - Seamless infinite looping
+ * 1. Full viral song player (Get Ready Dhurandhar title track)
  * 2. HTML5 Audio File Support with auto-fallback to native synthesis
  * 3. Global reactive state for Play/Pause, Volume, and Spectrum Visualizer
  */
@@ -27,7 +23,7 @@ class DhurandharMusicEngine {
       try {
         const base = (import.meta.env && import.meta.env.BASE_URL) ? import.meta.env.BASE_URL : './';
         const cleanBase = base.endsWith('/') ? base : `${base}/`;
-        const audio = new Audio(`${cleanBase}audio/dhurandhar.mp3`);
+        const audio = new Audio(`${cleanBase}audio/dhurandhar.mp3?v=get_ready_dhurandhar`);
         audio.loop = true;
         audio.volume = this.currentVolume;
         this.customAudio = audio;

@@ -728,7 +728,7 @@ export const App: React.FC = () => {
         </div>
       </footer>
 
-      {/* Persistent Viral Dhurandhar: Jaan Se Guzarte Hai Music Player */}
+      {/* Persistent Viral Dhurandhar: Get Ready Dhurandhar Music Player */}
       <DhurandharMusicPlayer />
     </div>
   );
