@@ -52,7 +52,7 @@ export const OcrAnalysisStep: React.FC<OcrAnalysisStepProps> = ({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span className="badge badge-cyan">Layer 2 of 6</span>
+            <span className="badge badge-cyan">Layer 2 of 7</span>
             <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#f8fafc' }}>
               Optical Character Recognition (OCR) &amp; Data Consistency
             </h2>
@@ -383,7 +383,7 @@ export const OcrAnalysisStep: React.FC<OcrAnalysisStepProps> = ({
             </button>
 
             <button onClick={onNext} className="btn btn-primary" style={{ fontSize: '0.82rem' }}>
-              <span>Step 3: Document Forensics</span>
+              <span>Step 3: QR Verification</span>
               <ArrowRight size={15} />
             </button>
           </div>

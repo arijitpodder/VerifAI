@@ -3,6 +3,7 @@ import {
   Scan,
   CheckCircle2,
   FileSearch,
+  QrCode,
   Server,
   Camera,
   ShieldAlert
@@ -17,10 +18,11 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ currentStep, onStepClick
   const steps = [
     { id: 1, label: 'Document Ingestion', icon: Scan, desc: 'ID/Passport capture' },
     { id: 2, label: 'OCR & Consistency', icon: FileSearch, desc: 'MRZ & date rules' },
-    { id: 3, label: 'Tamper Forensics', icon: CheckCircle2, desc: 'Canvas ELA & edges' },
-    { id: 4, label: 'Authority Registry', icon: Server, desc: 'ICAO & INTERPOL' },
-    { id: 5, label: 'Webcam Biometrics', icon: Camera, desc: 'Liveness & match' },
-    { id: 6, label: 'Risk Engine', icon: ShieldAlert, desc: 'Explainable verdict' },
+    { id: 3, label: 'QR Verification', icon: QrCode, desc: 'Payload & checksum' },
+    { id: 4, label: 'Tamper Forensics', icon: CheckCircle2, desc: 'Canvas ELA & edges' },
+    { id: 5, label: 'Authority Registry', icon: Server, desc: 'ICAO & INTERPOL' },
+    { id: 6, label: 'Webcam Biometrics', icon: Camera, desc: 'Liveness & match' },
+    { id: 7, label: 'Risk Engine', icon: ShieldAlert, desc: 'Explainable verdict' },
   ];
 
   return (

@@ -209,7 +209,7 @@ export const BiometricsStep: React.FC<BiometricsStepProps> = ({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span className="badge badge-cyan">Layer 5 of 6</span>
+            <span className="badge badge-cyan">Layer 6 of 7</span>
             <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#f8fafc' }}>
               Webcam Biometrics &amp; Liveness Verification
             </h2>
@@ -595,7 +595,7 @@ export const BiometricsStep: React.FC<BiometricsStepProps> = ({
             </button>
 
             <button onClick={onNext} className="btn btn-primary" style={{ fontSize: '0.82rem' }}>
-              <span>Step 6: Risk Assessment Engine</span>
+              <span>Step 7: Risk Assessment Engine</span>
               <ArrowRight size={15} />
             </button>
           </div>

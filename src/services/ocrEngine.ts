@@ -190,10 +190,14 @@ export function parseDocumentText(rawText: string): ExtractedFields {
   let dateOfBirth = '1990-01-01';
   let expiryDate = '2030-01-01';
   let issueDate = '2020-01-01';
-  let nationality = 'United States';
-  let issuingCountry = 'USA';
+
+  const isIndianDoc = /AADHAAR|UIDAI|UNIQUE\s*IDENTIFICATION|AUTHORITY\s*OF\s*INDIA|GOVERNMENT\s*OF\s*INDIA|BHARAT|INDIA|BENGAL|KOLKATA|DELHI|MUMBAI|SALT\s*LAKE|\b\d{4}\s*\d{4}\s*\d{4}\b/i.test(rawText);
+  const isUsDoc = /UNITED\s*STATES|DEPARTMENT\s*OF\s*STATE|US\s*PASSPORT/i.test(rawText) && !isIndianDoc;
+
+  let nationality = isIndianDoc ? 'India' : isUsDoc ? 'United States' : 'India';
+  let issuingCountry = isIndianDoc ? 'IND' : isUsDoc ? 'USA' : 'IND';
   let gender: 'M' | 'F' | 'X' = 'M';
-  let documentType: 'PASSPORT' | 'NATIONAL_ID' | 'DRIVERS_LICENSE' = 'NATIONAL_ID';
+  let documentType: 'PASSPORT' | 'NATIONAL_ID' | 'DRIVERS_LICENSE' = isIndianDoc ? 'NATIONAL_ID' : 'NATIONAL_ID';
   let mrzLine1 = '';
   let mrzLine2 = '';
 
@@ -399,22 +403,45 @@ export function parseDocumentText(rawText: string): ExtractedFields {
       }
     }
 
-    // Country & Jurisdiction detection
-    if (line.includes('UNITED STATES') || line.includes('USA')) {
-      issuingCountry = 'USA';
-      nationality = 'United States';
-    } else if (line.includes('AUSTRALIA')) {
-      issuingCountry = 'AUS';
-      nationality = 'Australia';
-    } else if (line.includes('UNITED KINGDOM') || line.includes('GBR') || line.includes('BRITISH')) {
-      issuingCountry = 'GBR';
-      nationality = 'United Kingdom';
-    } else if (line.includes('CALIFORNIA')) {
-      issuingCountry = 'USA (CA)';
-      nationality = 'United States';
-    } else if (line.includes('INDIA') || line.includes('WEST BENGAL') || line.includes('KOLKATA') || line.includes('JIS GROUP') || line.includes('NARULA')) {
+    // Country & Jurisdiction detection (Case-Insensitive)
+    const upperLine = line.toUpperCase();
+    if (
+      upperLine.includes('INDIA') ||
+      upperLine.includes('AADHAAR') ||
+      upperLine.includes('UIDAI') ||
+      upperLine.includes('AUTHORITY OF INDIA') ||
+      upperLine.includes('WEST BENGAL') ||
+      upperLine.includes('KOLKATA') ||
+      upperLine.includes('JIS GROUP') ||
+      upperLine.includes('NARULA')
+    ) {
       issuingCountry = 'IND';
       nationality = 'India';
+      documentType = 'NATIONAL_ID';
+    } else if (upperLine.includes('UNITED STATES') || upperLine.includes('USA')) {
+      if (!isIndianDoc) {
+        issuingCountry = 'USA';
+        nationality = 'United States';
+      }
+    } else if (upperLine.includes('AUSTRALIA')) {
+      issuingCountry = 'AUS';
+      nationality = 'Australia';
+    } else if (upperLine.includes('UNITED KINGDOM') || upperLine.includes('GBR') || upperLine.includes('BRITISH')) {
+      issuingCountry = 'GBR';
+      nationality = 'United Kingdom';
+    } else if (upperLine.includes('CALIFORNIA')) {
+      if (!isIndianDoc) {
+        issuingCountry = 'USA (CA)';
+        nationality = 'United States';
+      }
+    }
+  }
+
+  // If Indian document detected, check for 12-digit Aadhaar UID number anywhere in the text
+  if (isIndianDoc && (!documentNumber || documentNumber.length < 8)) {
+    const aadhaarFullMatch = rawText.match(/\b(\d{4}\s*\d{4}\s*\d{4})\b/);
+    if (aadhaarFullMatch) {
+      documentNumber = aadhaarFullMatch[1].replace(/\s+/g, ' ');
     }
   }
 

@@ -6,7 +6,6 @@ import {
   FileCheck2,
   ShieldX,
   UserX,
-  Play,
   ArrowRight,
   RotateCcw,
   RotateCw,
@@ -19,7 +18,7 @@ interface DocumentUploadStepProps {
   onCustomUpload: (file: File) => void;
   onRotateDocument?: (degrees: 90 | 180 | 270 | -90) => void;
   onProceedToAnalysis: () => void;
-  onRunFullWorkflow: () => void;
+  onRunFullWorkflow?: () => void;
   documentDataUri: string;
   onNavigateToFaceMatch?: () => void;
 }
@@ -30,7 +29,6 @@ export const DocumentUploadStep: React.FC<DocumentUploadStepProps> = ({
   onCustomUpload,
   onRotateDocument,
   onProceedToAnalysis,
-  onRunFullWorkflow,
   documentDataUri,
   onNavigateToFaceMatch
 }) => {
@@ -422,23 +420,14 @@ export const DocumentUploadStep: React.FC<DocumentUploadStepProps> = ({
               Execution Control
             </div>
             <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-              Run the verification pipeline step-by-step to inspect forensic layers, or trigger full automated end-to-end evaluation.
+              Run the verification pipeline step-by-step to inspect forensic layers.
             </p>
 
             <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
               <button
-                onClick={onRunFullWorkflow}
+                onClick={onProceedToAnalysis}
                 className="btn btn-primary"
                 style={{ flex: 1, minWidth: '180px' }}
-              >
-                <Play size={16} fill="#050b14" />
-                <span>Run Full Automated Pipeline</span>
-              </button>
-
-              <button
-                onClick={onProceedToAnalysis}
-                className="btn btn-secondary"
-                style={{ flex: 1, minWidth: '150px' }}
               >
                 <span>Inspect Step 2: OCR</span>
                 <ArrowRight size={16} />

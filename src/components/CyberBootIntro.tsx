@@ -266,8 +266,6 @@ export const CyberBootIntro: React.FC<CyberBootIntroProps> = ({ onComplete }) =>
     };
   }, []);
 
-  const activeScene = scenes[currentSceneIndex];
-
   return (
     <div
       onClick={() => {
@@ -310,7 +308,7 @@ export const CyberBootIntro: React.FC<CyberBootIntroProps> = ({ onComplete }) =>
           >
             <img
               src={scene.image}
-              alt={scene.title}
+              alt=""
               loading="eager"
               style={{
                 width: '100%',
@@ -451,13 +449,11 @@ export const CyberBootIntro: React.FC<CyberBootIntroProps> = ({ onComplete }) =>
         border: '1.5px solid rgba(255, 153, 51, 0.55)',
         boxShadow: '0 16px 50px rgba(0, 0, 0, 0.85), 0 0 40px rgba(255, 153, 51, 0.25)'
       }}>
-        {/* Dynamic Card Content with Rapid Snap */}
+        {/* Dynamic Card Content without landmark names */}
         <div
-          key={activeScene.id}
-          className="scene-text-snap"
-          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}
+          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', marginBottom: 14 }}
         >
-          {/* Dynamic Scene Badge */}
+          {/* System Badge */}
           <div style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -468,13 +464,12 @@ export const CyberBootIntro: React.FC<CyberBootIntroProps> = ({ onComplete }) =>
             border: '1px solid rgba(255, 153, 51, 0.5)',
             marginBottom: 10
           }}>
-            <span style={{ fontSize: '16px' }}>{activeScene.icon}</span>
             <span style={{ fontSize: '11px', fontWeight: 800, color: '#ffaa44', letterSpacing: '0.1em' }}>
-              {activeScene.badge}
+              QUANTUM SYSTEM INITIALIZATION
             </span>
           </div>
 
-          {/* Dynamic Title */}
+          {/* System Title */}
           <h1 style={{
             fontSize: '2.1rem',
             fontWeight: 900,
@@ -485,27 +480,26 @@ export const CyberBootIntro: React.FC<CyberBootIntroProps> = ({ onComplete }) =>
             WebkitTextFillColor: 'transparent',
             filter: 'drop-shadow(0 0 25px rgba(255, 153, 51, 0.6))'
           }}>
-            {activeScene.title}
+            VERIFAI
           </h1>
 
           <p style={{
             fontSize: '0.86rem',
             color: '#e2e8f0',
-            margin: '0 0 18px 0',
+            margin: '0 0 12px 0',
             lineHeight: 1.5,
-            maxWidth: '620px'
+            maxWidth: '560px'
           }}>
-            {activeScene.subtitle}
+            Higgsfield Neural Biometrics &amp; Forensic Document Verification
           </p>
         </div>
 
-        {/* Interactive Scene Switcher Navigation Pills */}
+        {/* Scene Switcher Indicator Dots without name labels */}
         <div style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           gap: 8,
-          flexWrap: 'wrap',
           marginBottom: 18
         }}>
           {scenes.map((sc, sIdx) => {
@@ -519,25 +513,17 @@ export const CyberBootIntro: React.FC<CyberBootIntroProps> = ({ onComplete }) =>
                   soundEffects.playClick();
                 }}
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '5px 13px',
+                  width: isSel ? 28 : 10,
+                  height: 10,
                   borderRadius: 99,
-                  background: isSel ? 'rgba(255, 153, 51, 0.35)' : 'rgba(255, 255, 255, 0.06)',
-                  border: isSel ? '1.5px solid #ff9933' : '1px solid rgba(255, 255, 255, 0.15)',
-                  color: isSel ? '#ffffff' : '#94a3b8',
-                  fontSize: '11px',
-                  fontWeight: isSel ? 800 : 500,
+                  background: isSel ? '#ff9933' : 'rgba(255, 255, 255, 0.25)',
+                  border: 'none',
                   cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                  boxShadow: isSel ? '0 0 14px rgba(255, 153, 51, 0.5)' : 'none',
-                  transform: isSel ? 'scale(1.05)' : 'scale(1.0)'
+                  transition: 'all 0.2s ease',
+                  boxShadow: isSel ? '0 0 12px rgba(255, 153, 51, 0.7)' : 'none'
                 }}
-              >
-                <span>{sc.icon}</span>
-                <span>{sc.title.split(' ')[0]}</span>
-              </button>
+                title={`Scene ${sIdx + 1}`}
+              />
             );
           })}
         </div>

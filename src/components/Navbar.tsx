@@ -2,7 +2,7 @@ import { ShieldCheck, FileText, Layers, Scan, UserCheck, Sparkles, Zap } from 'l
 import type { CanvasMode } from './HiggsfieldMotionCanvas';
 import { soundEffects } from '../services/soundEffects';
 
-export type AppMode = 'PIPELINE' | 'ID_LAB' | 'FACE_LAB' | 'ID_FACE_MATCH';
+export type AppMode = 'PIPELINE' | 'ID_FACE_MATCH' | 'ID_LAB' | 'FACE_LAB';
 
 interface NavbarProps {
   onOpenArchitecture: () => void;
@@ -80,7 +80,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
 
-        {/* Primary Mode Switcher */}
+        {/* Primary Mode Switcher: Full Forensics Pipeline first, then ID & Live Face Match */}
         <div style={{
           display: 'flex',
           background: '#040813',
@@ -90,6 +90,42 @@ export const Navbar: React.FC<NavbarProps> = ({
           gap: '0.35rem',
           flexWrap: 'wrap'
         }}>
+          {/* 1. Full Forensics Pipeline (FIRST) */}
+          <button
+            onClick={() => onChangeMode('PIPELINE')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              padding: '0.4rem 0.95rem',
+              borderRadius: 'var(--radius-sm)',
+              border: activeMode === 'PIPELINE' ? 'none' : '1px solid rgba(0, 242, 254, 0.4)',
+              cursor: 'pointer',
+              fontSize: '0.82rem',
+              fontWeight: 800,
+              background: activeMode === 'PIPELINE'
+                ? 'linear-gradient(135deg, #00f2fe, #38bdf8)'
+                : 'rgba(0, 242, 254, 0.1)',
+              color: activeMode === 'PIPELINE' ? '#050b14' : '#00f2fe',
+              transition: 'all 0.2s ease',
+              boxShadow: activeMode === 'PIPELINE' ? '0 0 15px rgba(0, 242, 254, 0.4)' : 'none'
+            }}
+          >
+            <Scan size={15} />
+            <span>Full Forensics Pipeline</span>
+            <span style={{
+              background: activeMode === 'PIPELINE' ? '#050b14' : 'var(--cyan-primary)',
+              color: activeMode === 'PIPELINE' ? 'var(--cyan-primary)' : '#050b14',
+              padding: '0.05rem 0.35rem',
+              borderRadius: '4px',
+              fontSize: '0.62rem',
+              fontWeight: 800
+            }}>
+              CORE
+            </span>
+          </button>
+
+          {/* 2. ID & Live Face Match (SECOND) */}
           <button
             onClick={() => onChangeMode('ID_FACE_MATCH')}
             style={{
@@ -124,27 +160,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </span>
           </button>
 
-          <button
-            onClick={() => onChangeMode('PIPELINE')}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.4rem',
-              padding: '0.4rem 0.85rem',
-              borderRadius: 'var(--radius-sm)',
-              border: 'none',
-              cursor: 'pointer',
-              fontSize: '0.8rem',
-              fontWeight: 600,
-              background: activeMode === 'PIPELINE' ? 'linear-gradient(135deg, #00f2fe, #38bdf8)' : 'transparent',
-              color: activeMode === 'PIPELINE' ? '#050b14' : 'var(--text-secondary)',
-              transition: 'all 0.2s ease'
-            }}
-          >
-            <Scan size={14} />
-            <span>Full Forensics Pipeline</span>
-          </button>
-
+          {/* 3. ID Lab */}
           <button
             onClick={() => onChangeMode('ID_LAB')}
             style={{
@@ -166,6 +182,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span>ID Lab</span>
           </button>
 
+          {/* 4. Face Lab */}
           <button
             onClick={() => onChangeMode('FACE_LAB')}
             style={{

@@ -47,7 +47,7 @@ export const ForensicViewerStep: React.FC<ForensicViewerStepProps> = ({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span className="badge badge-cyan">Layer 3 of 6</span>
+            <span className="badge badge-cyan">Layer 4 of 7</span>
             <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#f8fafc' }}>
               AI Document Forensics &amp; Tampering Analysis
             </h2>
@@ -389,11 +389,11 @@ export const ForensicViewerStep: React.FC<ForensicViewerStepProps> = ({
           }}>
             <button onClick={onPrev} className="btn btn-secondary" style={{ fontSize: '0.82rem' }}>
               <ArrowLeft size={15} />
-              <span>Back: OCR</span>
+              <span>Back: QR Verification</span>
             </button>
 
             <button onClick={onNext} className="btn btn-primary" style={{ fontSize: '0.82rem' }}>
-              <span>Step 4: Authority Database</span>
+              <span>Step 5: Authority Database</span>
               <ArrowRight size={15} />
             </button>
           </div>

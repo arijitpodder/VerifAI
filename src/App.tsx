@@ -23,10 +23,12 @@ import type { AppMode } from './components/Navbar';
 import { HeroBanner } from './components/HeroBanner';
 import { DocumentUploadStep } from './components/DocumentUploadStep';
 import { OcrAnalysisStep } from './components/OcrAnalysisStep';
+import { QrCodeStep } from './components/QrCodeStep';
 import { ForensicViewerStep } from './components/ForensicViewerStep';
 import { AuthorityCheckStep } from './components/AuthorityCheckStep';
 import { BiometricsStep } from './components/BiometricsStep';
 import { RiskEngineStep } from './components/RiskEngineStep';
+import type { QrParsedData } from './services/qrScannerService';
 import { AuditCertificateModal } from './components/AuditCertificateModal';
 import { ArchitectureModal } from './components/ArchitectureModal';
 import { AuditLogModal } from './components/AuditLogModal';
@@ -40,17 +42,18 @@ import { DhurandharMusicPlayer } from './components/DhurandharMusicPlayer';
 import { RefreshCw } from 'lucide-react';
 
 export const App: React.FC = () => {
-  // Application Mode: 'PIPELINE' | 'ID_LAB' | 'FACE_LAB' | 'ID_FACE_MATCH'
-  const [appMode, setAppMode] = useState<AppMode>('ID_FACE_MATCH');
+  // Application Mode: 'PIPELINE' | 'ID_FACE_MATCH' | 'ID_LAB' | 'FACE_LAB'
+  const [appMode, setAppMode] = useState<AppMode>('PIPELINE');
 
   // Futuristic Motion & Boot Intro States
   const [showBootIntro, setShowBootIntro] = useState<boolean>(true);
   const [motionMode, setMotionMode] = useState<CanvasMode>('TIRANGA');
 
-  // Active workflow step: 1 - 6
+  // Active workflow step: 1 - 7
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [selectedPreset, setSelectedPreset] = useState<PresetSample>(SAMPLE_DOCUMENTS[0]);
   const [documentUri, setDocumentUri] = useState<string>(svgToDataUri(SAMPLE_DOCUMENTS[0].docImageSvg));
+  const [qrData, setQrData] = useState<QrParsedData | null>(null);
 
   // Pipeline layer states
   const [fields, setFields] = useState<ExtractedFields>(SAMPLE_DOCUMENTS[0].extractedFields);
@@ -420,24 +423,28 @@ export const App: React.FC = () => {
     setCurrentStep(1);
     setAutomationMessage('Ingesting high-resolution credential...');
 
-    await new Promise((r) => setTimeout(r, 450));
+    await new Promise((r) => setTimeout(r, 400));
     setCurrentStep(2);
     setAutomationMessage('Running OCR & ICAO Doc 9303 checksum parity...');
 
-    await new Promise((r) => setTimeout(r, 550));
+    await new Promise((r) => setTimeout(r, 500));
     setCurrentStep(3);
+    setAutomationMessage('Scanning 2D matrix barcode & validating cryptographic QR payload...');
+
+    await new Promise((r) => setTimeout(r, 500));
+    setCurrentStep(4);
     setAutomationMessage('Performing Error Level Analysis (ELA) & edge forensics...');
 
-    await new Promise((r) => setTimeout(r, 600));
-    setCurrentStep(4);
+    await new Promise((r) => setTimeout(r, 550));
+    setCurrentStep(5);
     setAutomationMessage('Cross-referencing ICAO PKD & INTERPOL SLTD registry...');
 
     await new Promise((r) => setTimeout(r, 500));
-    setCurrentStep(5);
+    setCurrentStep(6);
     setAutomationMessage('Executing facial landmark correlation & liveness...');
 
-    await new Promise((r) => setTimeout(r, 600));
-    setCurrentStep(6);
+    await new Promise((r) => setTimeout(r, 550));
+    setCurrentStep(7);
     setAutomationMessage('Synthesizing explainable zero-trust risk score...');
 
     await new Promise((r) => setTimeout(r, 350));
@@ -455,6 +462,15 @@ export const App: React.FC = () => {
       subject: fields,
       consistencyValidation: consistency,
       forensicsFindings: forensics,
+      qrVerification: qrData ? {
+        format: qrData.format,
+        signaturePresent: qrData.signaturePresent,
+        fields: qrData.fields,
+        rawPayload: qrData.rawText,
+        matchesOcrName: qrData.matchesOcrName,
+        matchesOcrDocNumber: qrData.matchesOcrDocNumber,
+        matchesOcrDob: qrData.matchesOcrDob
+      } : { status: 'SKIPPED_OR_NOT_PRESENT', impact: 'NEUTRAL_SCORE_UNAFFECTED' },
       authorityDatabaseRecord: authority,
       biometricsAnalysis: biometrics,
       positiveSignals: riskBreakdown.positiveSignals,
@@ -499,54 +515,7 @@ export const App: React.FC = () => {
 
       {/* Main Content Area */}
       <main className="container" style={{ flex: 1, paddingBottom: '3rem', paddingTop: '1.25rem' }}>
-        {/* Render Dedicated ID Verification Lab */}
-        {appMode === 'ID_LAB' && (
-          <IdVerificationLab
-            initialDocumentUri={documentUri}
-            initialFields={fields}
-            initialConsistency={consistency}
-            initialForensics={forensics}
-            initialPreset={selectedPreset}
-            initialAuthority={authority}
-            onSyncWithMainPipeline={(doc, f, c, fRes, auth, preset) => {
-              setDocumentUri(doc);
-              setFields(f);
-              setConsistency(c);
-              setForensics(fRes);
-              if (auth) setAuthority(auth);
-              if (preset) setSelectedPreset(preset);
-              const updatedAuth = auth || authority;
-              const updatedRisk = evaluateOverallRisk(c, fRes, updatedAuth, biometrics);
-              setRiskBreakdown(updatedRisk);
-            }}
-            onNavigateToFaceLab={() => setAppMode('FACE_LAB')}
-            onNavigateToPipeline={() => setAppMode('PIPELINE')}
-            onNavigateToFaceMatch={() => setAppMode('ID_FACE_MATCH')}
-          />
-        )}
-
-        {/* Render Dedicated Face Verification Lab */}
-        {appMode === 'FACE_LAB' && (
-          <FaceVerificationLab
-            initialRefPhotoUri={svgToDataUri(selectedPreset.portraitSvg)}
-            initialLivePhotoUri={svgToDataUri(selectedPreset.liveCapturedSvg)}
-            initialPreset={selectedPreset}
-            onSyncBiometrics={(bioRes) => {
-              setBiometrics(bioRes);
-              const updatedRisk = evaluateOverallRisk(consistency, forensics, authority, bioRes);
-              setRiskBreakdown(updatedRisk);
-            }}
-          />
-        )}
-
-        {/* Render Dedicated ID Card & Live Webcam Face Matcher */}
-        {appMode === 'ID_FACE_MATCH' && (
-          <IdFaceMatchLab
-            onNavigateToPipeline={() => setAppMode('PIPELINE')}
-          />
-        )}
-
-        {/* Render Standard 6-Layer Multi-Step Pipeline */}
+        {/* Render Standard 6-Layer Multi-Step Pipeline (PRIMARY FIRST) */}
         {appMode === 'PIPELINE' && (
           <>
             <HeroBanner
@@ -590,23 +559,39 @@ export const App: React.FC = () => {
             )}
 
             {currentStep === 3 && (
-              <ForensicViewerStep
-                forensics={forensics}
-                originalImageUri={documentUri}
-                onNext={() => setCurrentStep(4)}
+              <QrCodeStep
+                documentUri={documentUri}
+                fields={fields}
+                onNext={(decoded) => {
+                  if (decoded) setQrData(decoded);
+                  setCurrentStep(4);
+                }}
+                onSkip={() => {
+                  // Skipping QR verification is neutral and does not affect the risk score
+                  setCurrentStep(4);
+                }}
                 onPrev={() => setCurrentStep(2)}
               />
             )}
 
             {currentStep === 4 && (
-              <AuthorityCheckStep
-                authority={authority}
+              <ForensicViewerStep
+                forensics={forensics}
+                originalImageUri={documentUri}
                 onNext={() => setCurrentStep(5)}
                 onPrev={() => setCurrentStep(3)}
               />
             )}
 
             {currentStep === 5 && (
+              <AuthorityCheckStep
+                authority={authority}
+                onNext={() => setCurrentStep(6)}
+                onPrev={() => setCurrentStep(4)}
+              />
+            )}
+
+            {currentStep === 6 && (
               <BiometricsStep
                 preset={selectedPreset}
                 biometrics={biometrics}
@@ -615,12 +600,12 @@ export const App: React.FC = () => {
                   const updatedRisk = evaluateOverallRisk(consistency, forensics, authority, updated);
                   setRiskBreakdown(updatedRisk);
                 }}
-                onNext={() => setCurrentStep(6)}
-                onPrev={() => setCurrentStep(4)}
+                onNext={() => setCurrentStep(7)}
+                onPrev={() => setCurrentStep(5)}
               />
             )}
 
-            {currentStep === 6 && (
+            {currentStep === 7 && (
               <RiskEngineStep
                 riskBreakdown={riskBreakdown}
                 onOpenCertificate={() => setIsCertificateModalOpen(true)}
@@ -628,10 +613,57 @@ export const App: React.FC = () => {
                 onReset={() => {
                   setCurrentStep(1);
                 }}
-                onPrev={() => setCurrentStep(5)}
+                onPrev={() => setCurrentStep(6)}
               />
             )}
           </>
+        )}
+
+        {/* Render Dedicated ID Card & Live Webcam Face Matcher (SECOND) */}
+        {appMode === 'ID_FACE_MATCH' && (
+          <IdFaceMatchLab
+            onNavigateToPipeline={() => setAppMode('PIPELINE')}
+          />
+        )}
+
+        {/* Render Dedicated ID Verification Lab */}
+        {appMode === 'ID_LAB' && (
+          <IdVerificationLab
+            initialDocumentUri={documentUri}
+            initialFields={fields}
+            initialConsistency={consistency}
+            initialForensics={forensics}
+            initialPreset={selectedPreset}
+            initialAuthority={authority}
+            onSyncWithMainPipeline={(doc, f, c, fRes, auth, preset) => {
+              setDocumentUri(doc);
+              setFields(f);
+              setConsistency(c);
+              setForensics(fRes);
+              if (auth) setAuthority(auth);
+              if (preset) setSelectedPreset(preset);
+              const updatedAuth = auth || authority;
+              const updatedRisk = evaluateOverallRisk(c, fRes, updatedAuth, biometrics);
+              setRiskBreakdown(updatedRisk);
+            }}
+            onNavigateToFaceLab={() => setAppMode('FACE_LAB')}
+            onNavigateToPipeline={() => setAppMode('PIPELINE')}
+            onNavigateToFaceMatch={() => setAppMode('ID_FACE_MATCH')}
+          />
+        )}
+
+        {/* Render Dedicated Face Verification Lab */}
+        {appMode === 'FACE_LAB' && (
+          <FaceVerificationLab
+            initialRefPhotoUri={svgToDataUri(selectedPreset.portraitSvg)}
+            initialLivePhotoUri={svgToDataUri(selectedPreset.liveCapturedSvg)}
+            initialPreset={selectedPreset}
+            onSyncBiometrics={(bioRes) => {
+              setBiometrics(bioRes);
+              const updatedRisk = evaluateOverallRisk(consistency, forensics, authority, bioRes);
+              setRiskBreakdown(updatedRisk);
+            }}
+          />
         )}
       </main>
 
@@ -674,7 +706,7 @@ export const App: React.FC = () => {
             }}>
               <div style={{
                 height: '100%',
-                width: `${(currentStep / 6) * 100}%`,
+                width: `${(currentStep / 7) * 100}%`,
                 background: 'linear-gradient(90deg, #00f2fe, #38bdf8)',
                 transition: 'width 0.4s ease'
               }} />

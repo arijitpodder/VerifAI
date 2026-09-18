@@ -23,7 +23,9 @@ import {
   RotateCcw,
   RotateCw,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Bot,
+  ExternalLink
 } from 'lucide-react';
 import { SAMPLE_DOCUMENTS, svgToDataUri } from '../data/sampleDocuments';
 import type { PresetSample } from '../types';
@@ -36,6 +38,13 @@ import {
 import type { DetectedFaceBox } from '../services/faceCropService';
 import { computeAuthenticFaceSimilarity, checkCropQualityFromUri } from '../services/biometricsEngine';
 import type { DetailedBiometricComparison, FaceQualityReport } from '../services/biometricsEngine';
+import {
+  getActiveAIProvider,
+  setActiveAIProvider,
+  getStoredApiKey,
+  setStoredApiKey
+} from '../services/aiVisionService';
+import type { AIProviderType } from '../services/aiVisionService';
 import { runRealOcr, extractNameCandidates, cleanCandidateName } from '../services/ocrEngine';
 import { soundEffects } from '../services/soundEffects';
 import { rotateImageDataUri } from '../services/imageRotationService';
@@ -54,6 +63,13 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
 
   // Sound Mute State
   const [isMuted, setIsMuted] = useState<boolean>(soundEffects.isMuted);
+
+  // AI Vision Provider State (Google Gemini 2.0 / OpenAI / Local)
+  const [aiProvider, setAiProvider] = useState<AIProviderType>(getActiveAIProvider());
+  const [isAiModalOpen, setIsAiModalOpen] = useState<boolean>(false);
+  const [geminiKeyInput, setGeminiKeyInput] = useState<string>(getStoredApiKey('gemini'));
+  const [openaiKeyInput, setOpenaiKeyInput] = useState<string>(getStoredApiKey('openai'));
+  const [aiSavedNotice, setAiSavedNotice] = useState<string | null>(null);
 
   // Step 1: ID Card State
   const [selectedPresetId, setSelectedPresetId] = useState<string>(SAMPLE_DOCUMENTS[0].id);
@@ -799,6 +815,28 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+            {/* AI Vision Model Settings Button */}
+            <button
+              onClick={() => setIsAiModalOpen(true)}
+              className="btn btn-secondary"
+              style={{
+                padding: '0.5rem 0.95rem',
+                fontSize: '0.8rem',
+                color: aiProvider === 'gemini' ? '#c084fc' : aiProvider === 'openai' ? '#34d399' : 'var(--cyan-primary)',
+                borderColor: aiProvider === 'gemini' ? 'rgba(168, 85, 247, 0.6)' : aiProvider === 'openai' ? 'rgba(16, 185, 129, 0.6)' : 'rgba(0, 242, 254, 0.5)',
+                boxShadow: aiProvider === 'gemini' ? '0 0 15px rgba(168, 85, 247, 0.3)' : 'none',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.45rem'
+              }}
+              title="Configure AI Vision Model (Google Gemini 2.0 / OpenAI / Local)"
+            >
+              <Bot size={16} />
+              <span>
+                {aiProvider === 'gemini' ? '⚡ AI: Gemini 2.0' : aiProvider === 'openai' ? '🧠 AI: GPT-4o' : '🛡️ AI: Local'}
+              </span>
+            </button>
+
             {/* Audio Toggle Button */}
             <button
               onClick={handleToggleSound}
@@ -2310,6 +2348,252 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
               <RefreshCw size={16} />
               <span>Verify Another ID Document</span>
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* AI Vision Model Configuration Modal */}
+      {isAiModalOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(2, 6, 15, 0.85)',
+          backdropFilter: 'blur(12px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '1.5rem'
+        }}>
+          <div className="glass-panel" style={{
+            maxWidth: '560px',
+            width: '100%',
+            background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.98) 0%, rgba(6, 12, 24, 0.99) 100%)',
+            border: '2px solid rgba(0, 242, 254, 0.4)',
+            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.8), 0 0 30px rgba(0, 242, 254, 0.2)',
+            padding: '2rem',
+            borderRadius: 'var(--radius-lg)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1.25rem'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <Bot size={22} color="var(--cyan-primary)" />
+                <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: '#ffffff' }}>
+                  AI Facial Verification Engine
+                </h3>
+              </div>
+              <button
+                onClick={() => setIsAiModalOpen(false)}
+                className="btn btn-secondary"
+                style={{ padding: '0.3rem 0.65rem', fontSize: '0.8rem' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', margin: 0 }}>
+              Select the multimodal AI vision model used to compare ID document portraits against live webcam captures:
+            </p>
+
+            {/* Provider Option 1: Google Gemini 2.0 / 1.5 Flash */}
+            <div style={{
+              background: aiProvider === 'gemini' ? 'rgba(168, 85, 247, 0.12)' : 'rgba(255, 255, 255, 0.03)',
+              border: aiProvider === 'gemini' ? '1.5px solid #a855f7' : '1px solid var(--border-subtle)',
+              borderRadius: 'var(--radius-md)',
+              padding: '1rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.65rem',
+              cursor: 'pointer'
+            }} onClick={() => setAiProvider('gemini')}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <input
+                    type="radio"
+                    name="ai_prov"
+                    checked={aiProvider === 'gemini'}
+                    onChange={() => setAiProvider('gemini')}
+                  />
+                  <strong style={{ color: '#ffffff', fontSize: '0.92rem' }}>
+                    ⚡ Google Gemini 2.0 Flash (Recommended)
+                  </strong>
+                </div>
+                <span className="badge badge-cyan" style={{ fontSize: '0.65rem', background: '#a855f7', color: '#ffffff' }}>
+                  Ultra-Accurate Vision AI
+                </span>
+              </div>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: 0 }}>
+                High-speed DeepMind multimodal vision. Eliminates lighting, angle, and camera noise false mismatches.
+              </p>
+              {aiProvider === 'gemini' && (
+                <div style={{ marginTop: '0.35rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }} onClick={(e) => e.stopPropagation()}>
+                  <label style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                    Gemini API Key:
+                  </label>
+                  <input
+                    type="password"
+                    value={geminiKeyInput}
+                    onChange={(e) => setGeminiKeyInput(e.target.value)}
+                    placeholder="Paste your Gemini API key (AIzaSy...)"
+                    style={{
+                      padding: '0.5rem 0.75rem',
+                      background: 'rgba(0,0,0,0.5)',
+                      border: '1px solid rgba(168, 85, 247, 0.4)',
+                      borderRadius: 'var(--radius-sm)',
+                      color: '#ffffff',
+                      fontSize: '0.82rem',
+                      fontFamily: 'var(--font-mono)'
+                    }}
+                  />
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.2rem' }}>
+                    <a
+                      href="https://aistudio.google.com/apikey"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ fontSize: '0.74rem', color: '#c084fc', display: 'flex', alignItems: 'center', gap: '0.3rem', textDecoration: 'none' }}
+                    >
+                      <span>Get Free Key (Google AI Studio)</span>
+                      <ExternalLink size={12} />
+                    </a>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                      100% Free • No Credit Card
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Provider Option 2: OpenAI GPT-4o */}
+            <div style={{
+              background: aiProvider === 'openai' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(255, 255, 255, 0.03)',
+              border: aiProvider === 'openai' ? '1.5px solid #10b981' : '1px solid var(--border-subtle)',
+              borderRadius: 'var(--radius-md)',
+              padding: '1rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.65rem',
+              cursor: 'pointer'
+            }} onClick={() => setAiProvider('openai')}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <input
+                    type="radio"
+                    name="ai_prov"
+                    checked={aiProvider === 'openai'}
+                    onChange={() => setAiProvider('openai')}
+                  />
+                  <strong style={{ color: '#ffffff', fontSize: '0.92rem' }}>
+                    🧠 OpenAI GPT-4o Vision
+                  </strong>
+                </div>
+                <span className="badge badge-cyan" style={{ fontSize: '0.65rem', background: '#10b981', color: '#ffffff' }}>
+                  ChatGPT Vision
+                </span>
+              </div>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: 0 }}>
+                Multimodal biometric examination using OpenAI GPT-4o-mini vision model.
+              </p>
+              {aiProvider === 'openai' && (
+                <div style={{ marginTop: '0.35rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }} onClick={(e) => e.stopPropagation()}>
+                  <label style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                    OpenAI API Key:
+                  </label>
+                  <input
+                    type="password"
+                    value={openaiKeyInput}
+                    onChange={(e) => setOpenaiKeyInput(e.target.value)}
+                    placeholder="Paste your OpenAI key (sk-...)"
+                    style={{
+                      padding: '0.5rem 0.75rem',
+                      background: 'rgba(0,0,0,0.5)',
+                      border: '1px solid rgba(16, 185, 129, 0.4)',
+                      borderRadius: 'var(--radius-sm)',
+                      color: '#ffffff',
+                      fontSize: '0.82rem',
+                      fontFamily: 'var(--font-mono)'
+                    }}
+                  />
+                  <a
+                    href="https://platform.openai.com/api-keys"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ fontSize: '0.74rem', color: '#34d399', display: 'flex', alignItems: 'center', gap: '0.3rem', textDecoration: 'none' }}
+                  >
+                    <span>Get OpenAI API Key</span>
+                    <ExternalLink size={12} />
+                  </a>
+                </div>
+              )}
+            </div>
+
+            {/* Provider Option 3: Local On-Device Neural Engine */}
+            <div style={{
+              background: aiProvider === 'local' ? 'rgba(0, 242, 254, 0.12)' : 'rgba(255, 255, 255, 0.03)',
+              border: aiProvider === 'local' ? '1.5px solid var(--cyan-primary)' : '1px solid var(--border-subtle)',
+              borderRadius: 'var(--radius-md)',
+              padding: '1rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.45rem',
+              cursor: 'pointer'
+            }} onClick={() => setAiProvider('local')}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <input
+                    type="radio"
+                    name="ai_prov"
+                    checked={aiProvider === 'local'}
+                    onChange={() => setAiProvider('local')}
+                  />
+                  <strong style={{ color: '#ffffff', fontSize: '0.92rem' }}>
+                    🛡️ VerifAI Quantum Mesh (100% Offline / Local)
+                  </strong>
+                </div>
+                <span className="badge badge-cyan" style={{ fontSize: '0.65rem' }}>
+                  No API Key Needed
+                </span>
+              </div>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: 0 }}>
+                Calibrated local engine using 888 MediaPipe dense AI dots, Procrustes 3D alignment, and cranial skull morphology.
+              </p>
+            </div>
+
+            {aiSavedNotice && (
+              <div style={{ color: '#34d399', fontSize: '0.8rem', fontWeight: 600, textAlign: 'center' }}>
+                {aiSavedNotice}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.5rem' }}>
+              <button
+                onClick={() => {
+                  setActiveAIProvider(aiProvider);
+                  setStoredApiKey('gemini', geminiKeyInput);
+                  setStoredApiKey('openai', openaiKeyInput);
+                  setAiSavedNotice('✅ AI Engine Configuration Saved!');
+                  setTimeout(() => {
+                    setAiSavedNotice(null);
+                    setIsAiModalOpen(false);
+                  }, 800);
+                }}
+                className="btn btn-primary"
+                style={{ flex: 1, padding: '0.65rem' }}
+              >
+                Save &amp; Apply Engine
+              </button>
+              <button
+                onClick={() => setIsAiModalOpen(false)}
+                className="btn btn-secondary"
+                style={{ padding: '0.65rem 1.25rem' }}
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
