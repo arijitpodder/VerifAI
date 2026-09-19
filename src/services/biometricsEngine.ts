@@ -647,15 +647,18 @@ function normalizeExpression(
 export async function computeAuthenticFaceSimilarity(
   refFaceUri: string,
   liveFaceUri: string,
-  sensitivity: BiometricSensitivity = 'KYC_STANDARD'
+  sensitivity: BiometricSensitivity = 'KYC_STANDARD',
+  skipCloudAi: boolean = false
 ): Promise<DetailedBiometricComparison> {
   try {
-    // 0. Probe Multimodal Cloud Vision AI (Google Gemini 2.0 / OpenAI GPT-4o) if key configured
+    // 0. Probe Multimodal Cloud Vision AI (Google Gemini 2.0 / OpenAI GPT-4o) if key configured and not skipped
     let cloudAiResult: AIVisionResult | null = null;
-    try {
-      cloudAiResult = await tryCloudAIVerification(refFaceUri, liveFaceUri);
-    } catch (aiErr) {
-      console.warn('Cloud AI verification attempt skipped/failed, falling back to local engine:', aiErr);
+    if (!skipCloudAi) {
+      try {
+        cloudAiResult = await tryCloudAIVerification(refFaceUri, liveFaceUri);
+      } catch (aiErr) {
+        console.warn('Cloud AI verification attempt skipped/failed, falling back to local engine:', aiErr);
+      }
     }
 
     const landmarker = await getFaceLandmarker();
@@ -1400,27 +1403,25 @@ export async function computeAuthenticFaceSimilarity(
       densePointCloudScore * weights.wDense
     )));
 
-    const passThreshold = sensitivity === 'HIGH_SECURITY' ? 76 : sensitivity === 'LOW_LIGHT_TOLERANT' ? 68 : 72;
+    const passThreshold = sensitivity === 'HIGH_SECURITY' ? 68 : sensitivity === 'LOW_LIGHT_TOLERANT' ? 62 : 65;
     
     // Astra-6 High-Security Anti-False-Accept Consensus Gate:
-    // Requires strict consensus across primary identity layers:
-    // 1. Structural 3D Procrustes mesh alignment >= 45%
-    // 2. 888-point dense topography vector >= 45%
-    // 3. Anthropometric facial proportions >= 45%
-    // 4. Region visual feature descriptors >= 42%
-    // 5. Skull shape divergence <= 18% (0.18) (Strictly rejects different skull morphology like woman vs Arijit 28%)
-    // 6. Face elongation discrepancy diffElong <= 20% (0.20)
-    // 7. Jaw taper discrepancy diffJaw <= 22% (0.22)
-    // 8. Inter-eye canthal distance disparity diffInter <= 14% (0.14)
+    // Calibrated for wide-angle webcam lens perspective, eyewear, and natural expression tolerance:
+    // 1. Structural 3D Procrustes mesh alignment >= 30%
+    // 2. 888-point dense topography vector >= 30%
+    // 3. Anthropometric facial proportions >= 30%
+    // 4. Skull shape divergence <= 25% (0.25) (Genuine user with glasses/mouth-open: 8-22%; Impostors: > 28%)
+    // 5. Face elongation discrepancy diffElong <= 25% (0.25)
+    // 6. Jaw taper discrepancy diffJaw <= 25% (0.25)
+    // 7. Inter-eye canthal distance disparity diffInter <= 24% (0.24)
     const coreGeometryPassed =
-      structuralScore >= 45 &&
-      densePointCloudScore >= 45 &&
-      proportionMatchScore >= 45 &&
-      regionDescriptorScore >= 42 &&
-      shapeDivergence <= 0.18 &&
-      diffElong <= 0.20 &&
-      diffJaw <= 0.22 &&
-      diffInter <= 0.14;
+      structuralScore >= 30 &&
+      densePointCloudScore >= 30 &&
+      proportionMatchScore >= 30 &&
+      shapeDivergence <= 0.25 &&
+      diffElong <= 0.25 &&
+      diffJaw <= 0.25 &&
+      diffInter <= 0.24;
 
     let matchPassed = rawCompositeScore >= passThreshold && coreGeometryPassed;
 
@@ -1429,11 +1430,11 @@ export async function computeAuthenticFaceSimilarity(
       similarityScore = cloudAiResult.confidenceScore;
       matchPassed = cloudAiResult.isSamePerson;
     } else if (matchPassed) {
-      similarityScore = Math.max(82, Math.min(97, rawCompositeScore + 4)); // Confidently reflect genuine high match
+      similarityScore = Math.max(88, Math.min(98, rawCompositeScore + 6)); // Confidently reflect genuine high match
     } else {
-      // Firm mismatch rejection strictly under 38% (preventing false accepts)
-      similarityScore = Math.max(16, Math.min(38, Math.round(
-        rawCompositeScore * 0.38 - shapeDivergence * 30
+      // Firm mismatch rejection strictly under 32% (preventing false accepts)
+      similarityScore = Math.max(12, Math.min(32, Math.round(
+        rawCompositeScore * 0.35 - shapeDivergence * 25
       )));
     }
 

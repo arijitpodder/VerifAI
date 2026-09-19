@@ -29,14 +29,37 @@ interface Shockwave {
 export interface HiggsfieldMotionCanvasProps {
   initialMode?: HiggsfieldMode;
   mode?: HiggsfieldMode;
+  paused?: boolean;
 }
 
 export const HiggsfieldMotionCanvas: React.FC<HiggsfieldMotionCanvasProps> = ({
   initialMode = 'SYNTHESIS',
-  mode
+  mode,
+  paused = false
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [activeMode, setActiveMode] = useState<HiggsfieldMode>(mode || initialMode);
+  const glowCacheRef = useRef<Map<string, HTMLCanvasElement>>(new Map());
+
+  const getGlowSprite = (color: string): HTMLCanvasElement => {
+    let sprite = glowCacheRef.current.get(color);
+    if (!sprite) {
+      sprite = document.createElement('canvas');
+      sprite.width = 64;
+      sprite.height = 64;
+      const sCtx = sprite.getContext('2d');
+      if (sCtx) {
+        const grad = sCtx.createRadialGradient(32, 32, 0, 32, 32, 32);
+        grad.addColorStop(0, color);
+        grad.addColorStop(0.4, color + '44');
+        grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        sCtx.fillStyle = grad;
+        sCtx.fillRect(0, 0, 64, 64);
+      }
+      glowCacheRef.current.set(color, sprite);
+    }
+    return sprite;
+  };
 
   useEffect(() => {
     if (mode) {
@@ -80,6 +103,7 @@ export const HiggsfieldMotionCanvas: React.FC<HiggsfieldMotionCanvasProps> = ({
   }, []);
 
   useEffect(() => {
+    if (paused) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -287,15 +311,17 @@ export const HiggsfieldMotionCanvas: React.FC<HiggsfieldMotionCanvasProps> = ({
 
       // ── 2. Quantum Higgsfield Filaments / Particle Connections ──
       const connectDist = activeMode === 'QUANTUM' || activeMode === 'SYNTHESIS' ? 120 : 70;
+      const connectDistSq = connectDist * connectDist;
       for (let i = 0; i < particles.length; i++) {
         const p1 = particles[i];
         for (let j = i + 1; j < particles.length; j++) {
           const p2 = particles[j];
           const dx = p1.x - p2.x;
           const dy = p1.y - p2.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
+          const distSq = dx * dx + dy * dy;
 
-          if (dist < connectDist) {
+          if (distSq < connectDistSq) {
+            const dist = Math.sqrt(distSq);
             const alpha = (1 - dist / connectDist) * 0.18;
             ctx.beginPath();
             ctx.moveTo(p1.x, p1.y);
@@ -337,10 +363,11 @@ export const HiggsfieldMotionCanvas: React.FC<HiggsfieldMotionCanvasProps> = ({
         if (mouseRef.current.isHovering) {
           const dx = mouseRef.current.x - p.x;
           const dy = mouseRef.current.y - p.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
+          const distSq = dx * dx + dy * dy;
           const maxDist = 220;
 
-          if (dist < maxDist && dist > 5) {
+          if (distSq < maxDist * maxDist && distSq > 25) {
+            const dist = Math.sqrt(distSq);
             const force = (1 - dist / maxDist) * 0.8;
             p.x += (dx / dist) * force;
             p.y += (dy / dist) * force;
@@ -348,16 +375,10 @@ export const HiggsfieldMotionCanvas: React.FC<HiggsfieldMotionCanvasProps> = ({
           }
         }
 
-        // Render glowing particle halo (Higgsfield chromatic emission)
-        const radGrad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.radius * 3.5);
-        radGrad.addColorStop(0, p.color);
-        radGrad.addColorStop(0.4, p.color + '44');
-        radGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.radius * 3.5, 0, Math.PI * 2);
-        ctx.fillStyle = radGrad;
-        ctx.fill();
+        // Render glowing particle halo (Higgsfield chromatic emission) via GPU-accelerated blit
+        const sprite = getGlowSprite(p.color);
+        const haloR = p.radius * 3.5;
+        ctx.drawImage(sprite, p.x - haloR, p.y - haloR, haloR * 2, haloR * 2);
 
         // Core dot
         ctx.beginPath();
@@ -417,7 +438,7 @@ export const HiggsfieldMotionCanvas: React.FC<HiggsfieldMotionCanvasProps> = ({
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseleave', handleMouseLeave);
     };
-  }, [activeMode]);
+  }, [activeMode, paused]);
 
   return (
     <canvas

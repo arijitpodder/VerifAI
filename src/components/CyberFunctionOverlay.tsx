@@ -141,10 +141,28 @@ export const SynapticMatchBridge: React.FC<SynapticMatchBridgeProps> = ({ isMatc
     let animId: number;
     let t = 0;
 
+    let w = canvas.parentElement?.clientWidth || 300;
+    let h = canvas.parentElement?.clientHeight || 60;
+    canvas.width = w;
+    canvas.height = h;
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const newW = Math.floor(entry.contentRect.width);
+        const newH = Math.floor(entry.contentRect.height);
+        if (newW > 0 && newH > 0 && (canvas.width !== newW || canvas.height !== newH)) {
+          w = canvas.width = newW;
+          h = canvas.height = newH;
+        }
+      }
+    });
+
+    if (canvas.parentElement) {
+      resizeObserver.observe(canvas.parentElement);
+    }
+
     const render = () => {
       t += 0.05;
-      const w = (canvas.width = canvas.parentElement?.clientWidth || 300);
-      const h = (canvas.height = canvas.parentElement?.clientHeight || 60);
 
       ctx.clearRect(0, 0, w, h);
 
@@ -189,7 +207,10 @@ export const SynapticMatchBridge: React.FC<SynapticMatchBridgeProps> = ({ isMatc
     };
 
     render();
-    return () => cancelAnimationFrame(animId);
+    return () => {
+      cancelAnimationFrame(animId);
+      resizeObserver.disconnect();
+    };
   }, [isMatching]);
 
   if (!isMatching) return null;

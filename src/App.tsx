@@ -494,7 +494,7 @@ export const App: React.FC = () => {
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', position: 'relative' }}>
       {/* Hyper-Futuristic Generative Motion Canvas */}
-      <HiggsfieldMotionCanvas mode={motionMode} />
+      <HiggsfieldMotionCanvas mode={motionMode} paused={showBootIntro} />
 
       {/* Cinematic Cyber Boot Intro Sequence */}
       {showBootIntro && (

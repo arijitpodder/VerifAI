@@ -42,9 +42,10 @@ import {
   getActiveAIProvider,
   setActiveAIProvider,
   getStoredApiKey,
-  setStoredApiKey
+  setStoredApiKey,
+  runQuadConsensusVerification
 } from '../services/aiVisionService';
-import type { AIProviderType } from '../services/aiVisionService';
+import type { AIProviderType, QuadConsensusResult } from '../services/aiVisionService';
 import { runRealOcr, extractNameCandidates, cleanCandidateName } from '../services/ocrEngine';
 import { soundEffects } from '../services/soundEffects';
 import { rotateImageDataUri } from '../services/imageRotationService';
@@ -108,6 +109,7 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
   const [animatedScore, setAnimatedScore] = useState<number>(0);
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [showProportionDetails, setShowProportionDetails] = useState<boolean>(false);
+  const [quadConsensus, setQuadConsensus] = useState<QuadConsensusResult | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageContainerRef = useRef<HTMLDivElement>(null);
@@ -650,11 +652,20 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
     setIsAnalyzing(true);
     soundEffects.playQuantumHum();
 
-    // 1. Authentic biometric cross-correlation
-    const comp = await computeAuthenticFaceSimilarity(scannedPhoto, livePhoto);
+    // 1. Compute authentic biometric comparison first so landmarks appear immediately on screen (skipCloudAi=true avoids recursive loops)
+    const comp = await computeAuthenticFaceSimilarity(scannedPhoto, livePhoto, 'KYC_STANDARD', true);
     setComparisonResult(comp);
 
-    // 2. Name validation against ID card OCR text
+    // 2. Run Quad-AI Consensus Verification across Our AI, Gemini, Groq, and ChatGPT
+    let quadResult: QuadConsensusResult | null = null;
+    try {
+      quadResult = await runQuadConsensusVerification(scannedPhoto, livePhoto, comp);
+      setQuadConsensus(quadResult);
+    } catch (qErr) {
+      console.warn('Quad-AI execution notice:', qErr);
+    }
+
+    // 3. Name validation against ID card OCR text
     let nScore = 100;
     const normalizedEntered = enteredName.trim().toUpperCase();
     const candidateMatches = nameCandidates.map((c) => c.toUpperCase());
@@ -679,8 +690,19 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
     }
     setNameMatchScore(nScore);
 
-    // 3. Final Decision: Face Verification
-    const facePassed = comp.matchPassed && comp.similarityScore >= 70;
+    // 4. Final Decision: Face Verification
+    // User instruction: "final result will be average of all of the result"
+    let targetScore: number;
+    let facePassed: boolean;
+
+    if (quadResult && quadResult.respondingCount > 0) {
+      targetScore = quadResult.confidenceScore; // Exact average of all responding AI models!
+      facePassed = quadResult.isMatch;
+    } else {
+      targetScore = comp.similarityScore;
+      facePassed = comp.matchPassed && comp.similarityScore >= 65;
+    }
+
     setVerificationPassed(facePassed);
 
     // Generate cryptographic audit hash
@@ -689,10 +711,9 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
 
     // Animated score counting up from 0 to actual score
     setAnimatedScore(0);
-    const targetScore = comp.similarityScore; // Authentic score preserved!
 
-    const stepTime = 16;
-    const totalSteps = 45;
+    const stepTime = 28;
+    const totalSteps = 28;
     let currentStepNum = 0;
 
     const countInterval = setInterval(() => {
@@ -2057,10 +2078,188 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
             </div>
           </div>
 
+          {/* ── QUAD-AI BIOMETRIC CONSENSUS PANEL (4 AI MODELS) ── */}
+          {quadConsensus && (
+            <div style={{ marginTop: '1rem', marginBottom: '1.25rem' }}>
+              <div style={{
+                background: 'rgba(4, 8, 19, 0.95)',
+                border: '1px solid rgba(0, 242, 254, 0.35)',
+                borderRadius: 'var(--radius-lg)',
+                padding: '1.5rem',
+                boxShadow: '0 0 35px rgba(0, 242, 254, 0.15)'
+              }}>
+                {/* Header with Responding and Exempted Counts */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '1rem' }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                      <span style={{ fontSize: '1.25rem', fontWeight: 900, color: '#ffffff', letterSpacing: '-0.01em' }}>
+                        ⚡ Quad-AI Biometric Consensus
+                      </span>
+                      <span className="badge badge-cyan" style={{ fontSize: '0.72rem', padding: '0.2rem 0.6rem' }}>
+                        4 Models Executed Together
+                      </span>
+                    </div>
+                    <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: '0.35rem 0 0 0' }}>
+                      Each AI independently maps thousands of distinct biometric data points, tracking Pupillary Distance (PD), Temple Width, Facial Symmetry, and Facial Structure.
+                    </p>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                    <span style={{
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      padding: '0.35rem 0.85rem',
+                      borderRadius: '99px',
+                      background: 'rgba(16, 185, 129, 0.15)',
+                      color: '#10b981',
+                      border: '1px solid rgba(16, 185, 129, 0.35)'
+                    }}>
+                      ✓ {quadConsensus.respondingCount} of 4 Responded
+                    </span>
+
+                    {quadConsensus.exemptedCount > 0 && (
+                      <span style={{
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        padding: '0.35rem 0.85rem',
+                        borderRadius: '99px',
+                        background: 'rgba(245, 158, 11, 0.15)',
+                        color: '#f59e0b',
+                        border: '1px solid rgba(245, 158, 11, 0.35)'
+                      }}>
+                        ⚠ {quadConsensus.exemptedCount} Exempted
+                      </span>
+                    )}
+
+                    <span style={{
+                      fontSize: '0.85rem',
+                      fontWeight: 900,
+                      padding: '0.35rem 0.95rem',
+                      borderRadius: '99px',
+                      background: quadConsensus.isMatch ? 'rgba(0, 242, 254, 0.18)' : 'rgba(239, 68, 68, 0.18)',
+                      color: quadConsensus.isMatch ? 'var(--cyan-primary)' : '#ef4444',
+                      border: quadConsensus.isMatch ? '1px solid var(--cyan-primary)' : '1px solid #ef4444'
+                    }}>
+                      Exact Average: {quadConsensus.confidenceScore}%
+                    </span>
+                  </div>
+                </div>
+
+                {/* 4 Cards Grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
+                  {quadConsensus.modelsList.map((m) => {
+                    const isExempt = m.telemetry?.isExempted || m.telemetry?.httpStatus !== 200;
+                    return (
+                      <div
+                        key={m.provider}
+                        style={{
+                          background: 'rgba(6, 12, 24, 0.85)',
+                          border: isExempt
+                            ? '1px solid rgba(245, 158, 11, 0.35)'
+                            : m.isSamePerson
+                              ? '1px solid rgba(16, 185, 129, 0.4)'
+                              : '1px solid rgba(239, 68, 68, 0.4)',
+                          borderRadius: 'var(--radius-md)',
+                          padding: '1.15rem',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'space-between',
+                          gap: '0.85rem',
+                          boxShadow: isExempt ? 'none' : m.isSamePerson ? '0 0 15px rgba(16, 185, 129, 0.12)' : '0 0 15px rgba(239, 68, 68, 0.12)'
+                        }}
+                      >
+                        <div>
+                          {/* Header: Name and Status */}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                            <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#ffffff' }}>
+                              {m.displayName}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: '0.68rem',
+                                fontWeight: 700,
+                                padding: '0.15rem 0.5rem',
+                                borderRadius: '4px',
+                                background: isExempt ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+                                color: isExempt ? '#f59e0b' : '#10b981',
+                                border: isExempt ? '1px solid rgba(245, 158, 11, 0.3)' : '1px solid rgba(16, 185, 129, 0.3)'
+                              }}
+                            >
+                              {isExempt ? 'EXEMPTED' : 'LIVE 200'}
+                            </span>
+                          </div>
+
+                          {/* Score & Verdict Banner */}
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                            <span style={{
+                              fontSize: '1.75rem',
+                              fontWeight: 900,
+                              color: isExempt ? 'var(--text-muted)' : m.isSamePerson ? '#10b981' : '#ef4444'
+                            }}>
+                              {isExempt ? '--' : `${m.confidenceScore}%`}
+                            </span>
+                            <span style={{
+                              fontSize: '0.75rem',
+                              fontWeight: 800,
+                              color: isExempt ? '#f59e0b' : m.isSamePerson ? '#10b981' : '#ef4444'
+                            }}>
+                              {isExempt ? '(Exempted from avg)' : m.isSamePerson ? 'HIGH MATCH' : 'MISMATCH'}
+                            </span>
+                          </div>
+
+                          {/* Biometric Breakdown Requested by User */}
+                          <div style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '0.4rem',
+                            fontSize: '0.74rem',
+                            background: 'rgba(0, 0, 0, 0.4)',
+                            padding: '0.65rem 0.75rem',
+                            borderRadius: 'var(--radius-sm)',
+                            border: '1px solid rgba(255,255,255,0.05)'
+                          }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem' }}>
+                              <span style={{ color: 'var(--text-muted)' }}>👁️ Pupillary Distance:</span>
+                              <strong style={{ color: '#ffffff', textAlign: 'right' }}>{m.breakdown.pupillaryDistancePD}</strong>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem' }}>
+                              <span style={{ color: 'var(--text-muted)' }}>🏛️ Temple Width:</span>
+                              <strong style={{ color: '#ffffff', textAlign: 'right' }}>{m.breakdown.templeWidth}</strong>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem' }}>
+                              <span style={{ color: 'var(--text-muted)' }}>⚖️ Facial Symmetry:</span>
+                              <strong style={{ color: '#ffffff', textAlign: 'right' }}>{m.breakdown.facialSymmetry}</strong>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem' }}>
+                              <span style={{ color: 'var(--text-muted)' }}>🦴 Facial Structure:</span>
+                              <strong style={{ color: '#ffffff', textAlign: 'right' }}>{m.breakdown.facialStructure}</strong>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Reasoning */}
+                        <p style={{
+                          fontSize: '0.72rem',
+                          color: isExempt ? 'var(--text-muted)' : 'var(--text-secondary)',
+                          lineHeight: 1.45,
+                          margin: 0,
+                          borderTop: '1px solid rgba(255,255,255,0.05)',
+                          paddingTop: '0.5rem'
+                        }}>
+                          {m.reasoning}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Metric Breakdown Cards */}
           <div style={{ padding: '0.5rem', marginBottom: '1rem', textAlign: 'center' }}>
             <span style={{ fontSize: '0.8rem', letterSpacing: '0.05em', color: '#38bdf8', fontWeight: 800, textTransform: 'uppercase', background: 'rgba(56, 189, 248, 0.15)', padding: '0.4rem 0.8rem', borderRadius: '4px', border: '1px solid rgba(56, 189, 248, 0.4)' }}>
-              ⚡ GPT Astra-6 Neural Engine (64 AI Models Active)
+              ⚡ Detailed Biometric Telemetry Matrix
             </span>
           </div>
 

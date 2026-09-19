@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect } from 'react';
 import type { FaceLandmarkVisualization } from '../services/biometricsEngine';
 
 interface FaceLandmarkOverlayProps {
@@ -74,29 +74,8 @@ export const FaceLandmarkOverlay: React.FC<FaceLandmarkOverlayProps> = ({
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [animationFrame, setAnimationFrame] = useState(0);
-  const animationRef = useRef<number | null>(null);
 
-  // Subtle pulsing animation for dots (throttled to ~30fps for performance)
-  useEffect(() => {
-    let frame = 0;
-    let lastTime = 0;
-    const targetInterval = 1000 / 30; // 30fps cap
-    const animate = (time: number) => {
-      if (time - lastTime >= targetInterval) {
-        frame++;
-        setAnimationFrame(frame);
-        lastTime = time;
-      }
-      animationRef.current = requestAnimationFrame(animate);
-    };
-    animationRef.current = requestAnimationFrame(animate);
-    return () => {
-      if (animationRef.current) cancelAnimationFrame(animationRef.current);
-    };
-  }, []);
-
-  // Main rendering
+  // Main rendering driven directly by requestAnimationFrame without React state re-renders
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !visualization) return;
@@ -104,13 +83,17 @@ export const FaceLandmarkOverlay: React.FC<FaceLandmarkOverlayProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const w = canvas.width;
-    const h = canvas.height;
-    ctx.clearRect(0, 0, w, h);
+    let animId: number;
+    const startTime = performance.now();
 
-    const { landmarks, keypoints, measurementLines } = visualization;
-    const pulsePhase = (animationFrame % 120) / 120; // 0 to 1 cycle
-    const pulse = 0.6 + 0.4 * Math.sin(pulsePhase * Math.PI * 2);
+    const render = (time: number) => {
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+
+      const { landmarks, keypoints, measurementLines } = visualization;
+      const pulsePhase = ((time - startTime) * 0.0005) % 1; // smooth 2-second cycle
+      const pulse = 0.6 + 0.4 * Math.sin(pulsePhase * Math.PI * 2);
 
     // ── Draw jaw contour outline (smooth bezier curve) ──
     if (visualization.jawContour && visualization.jawContour.length > 2) {
@@ -133,29 +116,42 @@ export const FaceLandmarkOverlay: React.FC<FaceLandmarkOverlayProps> = ({
     if (showMeshLines && landmarks.length > 0) {
       ctx.strokeStyle = `rgba(0, 242, 254, ${0.12 * pulse})`;
       ctx.lineWidth = 0.5;
+      ctx.beginPath();
       for (const [i, j] of MESH_CONNECTIONS) {
         if (i < landmarks.length && j < landmarks.length) {
-          ctx.beginPath();
           ctx.moveTo(landmarks[i].x * w, landmarks[i].y * h);
           ctx.lineTo(landmarks[j].x * w, landmarks[j].y * h);
-          ctx.stroke();
         }
       }
+      ctx.stroke();
     }
 
     // ── Draw all 800+ landmark dots (888 precision dots) ──
     if (showAllDots && landmarks.length > 0) {
-      for (let i = 0; i < landmarks.length; i++) {
+      // 1. Primary facial mesh dots (< 478) batched into a single path
+      const baselineCount = Math.min(478, landmarks.length);
+      ctx.fillStyle = `rgba(16, 185, 129, ${0.40 * pulse})`;
+      ctx.beginPath();
+      for (let i = 0; i < baselineCount; i++) {
         const pt = landmarks[i];
         const x = pt.x * w;
         const y = pt.y * h;
+        ctx.moveTo(x + 1.3, y);
+        ctx.arc(x, y, 1.3, 0, Math.PI * 2);
+      }
+      ctx.fill();
 
-        const isDenseExt = i >= 478;
+      // 2. Dense extension dots (>= 478) batched into a single path
+      if (landmarks.length > 478) {
+        ctx.fillStyle = `rgba(0, 242, 254, ${0.42 * pulse})`;
         ctx.beginPath();
-        ctx.arc(x, y, isDenseExt ? 0.95 : 1.3, 0, Math.PI * 2);
-        ctx.fillStyle = isDenseExt
-          ? `rgba(0, 242, 254, ${0.42 * pulse})`
-          : `rgba(16, 185, 129, ${0.40 * pulse})`;
+        for (let i = 478; i < landmarks.length; i++) {
+          const pt = landmarks[i];
+          const x = pt.x * w;
+          const y = pt.y * h;
+          ctx.moveTo(x + 0.95, y);
+          ctx.arc(x, y, 0.95, 0, Math.PI * 2);
+        }
         ctx.fill();
       }
     }
@@ -273,7 +269,14 @@ export const FaceLandmarkOverlay: React.FC<FaceLandmarkOverlayProps> = ({
       }
     }
 
-  }, [visualization, animationFrame, showAllDots, showKeypoints, showMeasurements, showMeshLines]);
+      animId = requestAnimationFrame(render);
+    };
+
+    animId = requestAnimationFrame(render);
+    return () => {
+      cancelAnimationFrame(animId);
+    };
+  }, [visualization, showAllDots, showKeypoints, showMeasurements, showMeshLines, width, height]);
 
   return (
     <div

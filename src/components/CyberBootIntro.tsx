@@ -125,7 +125,7 @@ export const CyberBootIntro: React.FC<CyberBootIntroProps> = ({ onComplete }) =>
           handleFinish();
         }, 300);
       }
-    }, 25);
+    }, 75);
 
     return () => {
       clearInterval(sceneInterval);
@@ -160,10 +160,31 @@ export const CyberBootIntro: React.FC<CyberBootIntroProps> = ({ onComplete }) =>
     let width = (canvas.width = window.innerWidth);
     let height = (canvas.height = window.innerHeight);
 
+    let beamGradients: CanvasGradient[] = [];
+    const updateGradients = () => {
+      const cx = width / 2;
+      const cy = height * 0.45;
+      const g0 = ctx.createRadialGradient(cx, cy, 50, cx, cy, width * 0.7);
+      g0.addColorStop(0, 'rgba(255, 153, 51, 0.12)');
+      g0.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+      const g1 = ctx.createRadialGradient(cx, cy, 50, cx, cy, width * 0.7);
+      g1.addColorStop(0, 'rgba(255, 255, 255, 0.10)');
+      g1.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+      const g2 = ctx.createRadialGradient(cx, cy, 50, cx, cy, width * 0.7);
+      g2.addColorStop(0, 'rgba(19, 136, 8, 0.12)');
+      g2.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+      beamGradients = [g0, g1, g2];
+    };
+    updateGradients();
+
     const handleResize = () => {
       if (!canvas) return;
       width = canvas.width = window.innerWidth;
       height = canvas.height = window.innerHeight;
+      updateGradients();
     };
     window.addEventListener('resize', handleResize);
 
@@ -197,10 +218,7 @@ export const CyberBootIntro: React.FC<CyberBootIntroProps> = ({ onComplete }) =>
       ctx.save();
       for (let b = 0; b < beamCount; b++) {
         const angle = (b * Math.PI * 2) / beamCount + t * 0.2;
-        const grad = ctx.createRadialGradient(cx, cy, 50, cx, cy, width * 0.7);
-        const color = b % 3 === 0 ? 'rgba(255, 153, 51, 0.12)' : b % 3 === 1 ? 'rgba(255, 255, 255, 0.10)' : 'rgba(19, 136, 8, 0.12)';
-        grad.addColorStop(0, color);
-        grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        const grad = beamGradients[b % 3] || beamGradients[0];
 
         ctx.beginPath();
         ctx.moveTo(cx, cy);
