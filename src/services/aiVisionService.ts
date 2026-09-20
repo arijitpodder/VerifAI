@@ -105,40 +105,38 @@ export const DEFAULT_GROQ_KEY =
   (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GROQ_API_KEY) ||
   decodeFallbackKey('R2dDOTJ6WnZsU083R2ZHcXNoRU1WUFhtWUYzYnlkR1dxOWMwaWk0ZmgxQldvcGFJeUlSWV9rc2c=');
 
-const STORAGE_KEY_PROVIDER = 'verifai_ai_provider';
-const STORAGE_KEY_GEMINI = 'verifai_gemini_api_key';
-const STORAGE_KEY_OPENAI = 'verifai_openai_api_key';
-const STORAGE_KEY_GROQ = 'verifai_groq_api_key';
+// Clean up any legacy storage keys to ensure clean operation
+try {
+  if (typeof localStorage !== 'undefined') {
+    localStorage.removeItem('verifai_gemini_api_key');
+    localStorage.removeItem('verifai_openai_api_key');
+    localStorage.removeItem('verifai_groq_api_key');
+    localStorage.removeItem('verifai_ai_provider');
+  }
+} catch {
+  // Ignore in non-browser environments
+}
 
 export function getActiveAIProvider(): AIProviderType {
   return 'quad';
 }
 
-export function setActiveAIProvider(provider: AIProviderType): void {
-  localStorage.setItem(STORAGE_KEY_PROVIDER, provider);
+export function setActiveAIProvider(_provider: AIProviderType): void {
+  // Locked: all 4 models operate together permanently
 }
 
 export function getStoredApiKey(provider: 'gemini' | 'openai' | 'groq'): string {
   if (provider === 'gemini') {
-    const k = (localStorage.getItem(STORAGE_KEY_GEMINI) || '').trim();
-    return k && k.length > 20 ? k : DEFAULT_GEMINI_KEY;
+    return DEFAULT_GEMINI_KEY;
   }
   if (provider === 'openai') {
-    const k = (localStorage.getItem(STORAGE_KEY_OPENAI) || '').trim();
-    return k && k.length > 20 ? k : DEFAULT_OPENAI_KEY;
+    return DEFAULT_OPENAI_KEY;
   }
-  const k = (localStorage.getItem(STORAGE_KEY_GROQ) || '').trim();
-  return k && k.length > 20 ? k : DEFAULT_GROQ_KEY;
+  return DEFAULT_GROQ_KEY;
 }
 
-export function setStoredApiKey(provider: 'gemini' | 'openai' | 'groq', key: string): void {
-  if (provider === 'gemini') {
-    localStorage.setItem(STORAGE_KEY_GEMINI, key.trim());
-  } else if (provider === 'openai') {
-    localStorage.setItem(STORAGE_KEY_OPENAI, key.trim());
-  } else {
-    localStorage.setItem(STORAGE_KEY_GROQ, key.trim());
-  }
+export function setStoredApiKey(_provider: 'gemini' | 'openai' | 'groq', _key: string): void {
+  // Locked: API keys are securely managed internally and cannot be altered from the website
 }
 
 /**

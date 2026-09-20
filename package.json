@@ -1,7 +1,31 @@
 {
   "name": "verifai",
+  "version": "1.0.0",
+  "description": "Defense-Grade AI Multi-Layer Identity & Document Forensics Engine with Quad-Core Biometric Ensemble",
+  "author": "Arijit Podder <officialarijit12@gmail.com>",
+  "homepage": "https://arijitpodder.github.io/VerifAI/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/arijitpodder/VerifAI.git"
+  },
+  "keywords": [
+    "identity-verification",
+    "kyc",
+    "face-verification",
+    "biometrics",
+    "document-forensics",
+    "computer-vision",
+    "gemini-vision",
+    "groq",
+    "gpt-4o",
+    "tamper-detection",
+    "ela-analysis",
+    "qr-code-scanner",
+    "mrz-parser",
+    "tesseract-ocr",
+    "zero-trust"
+  ],
   "private": true,
-  "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
