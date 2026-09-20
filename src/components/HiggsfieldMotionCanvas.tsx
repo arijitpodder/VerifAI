@@ -312,26 +312,22 @@ export const HiggsfieldMotionCanvas: React.FC<HiggsfieldMotionCanvasProps> = ({
       // ── 2. Quantum Higgsfield Filaments / Particle Connections ──
       const connectDist = activeMode === 'QUANTUM' || activeMode === 'SYNTHESIS' ? 120 : 70;
       const connectDistSq = connectDist * connectDist;
+      ctx.lineWidth = 0.75;
+      ctx.strokeStyle = activeMode === 'TIRANGA' ? 'rgba(255, 153, 51, 0.14)' : 'rgba(0, 242, 254, 0.14)';
+      ctx.beginPath();
       for (let i = 0; i < particles.length; i++) {
         const p1 = particles[i];
         for (let j = i + 1; j < particles.length; j++) {
           const p2 = particles[j];
           const dx = p1.x - p2.x;
           const dy = p1.y - p2.y;
-          const distSq = dx * dx + dy * dy;
-
-          if (distSq < connectDistSq) {
-            const dist = Math.sqrt(distSq);
-            const alpha = (1 - dist / connectDist) * 0.18;
-            ctx.beginPath();
+          if (dx * dx + dy * dy < connectDistSq) {
             ctx.moveTo(p1.x, p1.y);
             ctx.lineTo(p2.x, p2.y);
-            ctx.strokeStyle = `rgba(0, 242, 254, ${alpha})`;
-            ctx.lineWidth = 0.75;
-            ctx.stroke();
           }
         }
       }
+      ctx.stroke();
 
       // ── 3. Particle Evolution, Gravitational Pull & Nature Wind ──
       particles.forEach(p => {
@@ -375,17 +371,20 @@ export const HiggsfieldMotionCanvas: React.FC<HiggsfieldMotionCanvasProps> = ({
           }
         }
 
-        // Render glowing particle halo (Higgsfield chromatic emission) via GPU-accelerated blit
+        // Render glowing particle halo via GPU-accelerated blit
         const sprite = getGlowSprite(p.color);
         const haloR = p.radius * 3.5;
         ctx.drawImage(sprite, p.x - haloR, p.y - haloR, haloR * 2, haloR * 2);
-
-        // Core dot
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-        ctx.fillStyle = '#ffffff';
-        ctx.fill();
       });
+
+      // Unified core dots batch
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      particles.forEach(p => {
+        ctx.moveTo(p.x + p.radius, p.y);
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+      });
+      ctx.fill();
 
       // ── 4. Shockwave Ripples (Function execution energy pulse) ──
       for (let i = shockwavesRef.current.length - 1; i >= 0; i--) {

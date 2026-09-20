@@ -483,7 +483,7 @@ export async function verifyWithGroqVision(
   let liveTelemetry: LiveApiTelemetry = {
     provider: 'groq',
     displayName: 'Groq LPU AI (Ultra-Fast Inference)',
-    model: 'groq/compound-mini',
+    model: 'openai/gpt-oss-20b',
     endpoint: 'api.groq.com',
     httpStatus: 0,
     statusText: 'Connecting to Groq LPU API...',
@@ -494,7 +494,7 @@ export async function verifyWithGroqVision(
   };
 
   try {
-    const candidateModels = ['groq/compound-mini', 'openai/gpt-oss-20b', 'qwen/qwen3.8-27b'];
+    const candidateModels = ['openai/gpt-oss-20b', 'qwen/qwen3.8-27b', 'groq/compound', 'openai/gpt-oss-120b'];
     const promptText = buildBiometricPrompt(compMetrics);
 
     for (const model of candidateModels) {
@@ -533,8 +533,12 @@ export async function verifyWithGroqVision(
         liveTelemetry.latencyMs = latencyMs;
         liveTelemetry.model = model;
 
-        if (response.ok) {
-          const data = await response.json();
+        if (!response.ok) {
+          console.warn(`Groq candidate model ${model} returned HTTP ${response.status}. Attempting failover...`);
+          continue;
+        }
+
+        const data = await response.json();
           let rawText = data?.choices?.[0]?.message?.content;
           if (rawText) {
             rawText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
@@ -580,8 +584,7 @@ export async function verifyWithGroqVision(
               telemetry: liveTelemetry
             };
           }
-        }
-      } catch (err: any) {
+        } catch (err: any) {
         liveTelemetry.errorDetail = err?.message || 'Network error';
       }
     }
@@ -596,7 +599,7 @@ export async function verifyWithGroqVision(
   return {
     provider: 'groq',
     displayName: 'Groq LPU AI',
-    model: 'groq/compound-mini',
+    model: 'openai/gpt-oss-20b',
     isSamePerson: false,
     confidenceScore: 0,
     verdict: 'DIVERGENCE_MISMATCH',

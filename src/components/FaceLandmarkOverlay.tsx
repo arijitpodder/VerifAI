@@ -235,14 +235,11 @@ export const FaceLandmarkOverlay: React.FC<FaceLandmarkOverlayProps> = ({
         const y = kp.y * h;
         const r = (kp.radius || 4) * pulse;
 
-        // Glow effect
-        ctx.shadowColor = kp.color;
-        ctx.shadowBlur = 6;
+        // Glow halo (hardware-accelerated, zero CPU rasterizer stall)
         ctx.beginPath();
-        ctx.arc(x, y, r + 2, 0, Math.PI * 2);
-        ctx.fillStyle = `${kp.color}33`;
+        ctx.arc(x, y, r + 3, 0, Math.PI * 2);
+        ctx.fillStyle = `${kp.color}44`;
         ctx.fill();
-        ctx.shadowBlur = 0;
 
         // Solid dot
         ctx.beginPath();
