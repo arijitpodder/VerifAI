@@ -237,6 +237,58 @@ body {
   animation: pulseGlow 2s infinite ease-in-out;
 }
 
+/* Futuristic Cyber Spin, Gyro Radar & Shimmer Keyframes */
+@keyframes cyberSpin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes cyberSpinReverse {
+  0% {
+    transform: rotate(360deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+@keyframes cyberPulseGlow {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 20px rgba(0, 242, 254, 0.4), inset 0 0 15px rgba(0, 242, 254, 0.2);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 35px rgba(0, 242, 254, 0.8), inset 0 0 25px rgba(0, 242, 254, 0.4);
+  }
+}
+
+@keyframes barShimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.shimmer-progress-bar {
+  background: linear-gradient(
+    90deg,
+    #00f2fe 0%,
+    #38bdf8 25%,
+    #10b981 50%,
+    #38bdf8 75%,
+    #00f2fe 100%
+  );
+  background-size: 200% 100%;
+  animation: barShimmer 2s infinite linear;
+}
+
 /* Grid helper */
 .grid-2 {
   display: grid;

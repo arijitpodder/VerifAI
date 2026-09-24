@@ -191,13 +191,13 @@ export function parseDocumentText(rawText: string): ExtractedFields {
   let expiryDate = '2030-01-01';
   let issueDate = '2020-01-01';
 
-  const isIndianDoc = /AADHAAR|UIDAI|UNIQUE\s*IDENTIFICATION|AUTHORITY\s*OF\s*INDIA|GOVERNMENT\s*OF\s*INDIA|BHARAT|INDIA|BENGAL|KOLKATA|DELHI|MUMBAI|SALT\s*LAKE|\b\d{4}\s*\d{4}\s*\d{4}\b/i.test(rawText);
+  const isIndianDoc = /AADHAAR|आधार|UIDAI|UNIQUE\s*IDENTIFICATION|AUTHORITY\s*OF\s*INDIA|GOVERNMENT\s*OF\s*INDIA|भारत|BHARAT|INDIA|BENGAL|KOLKATA|DELHI|MUMBAI|SALT\s*LAKE|\b\d{4}[\s.-]*\d{4}[\s.-]*\d{4}\b|ENROLMENT|MERA\s*AADHAAR/i.test(rawText);
   const isUsDoc = /UNITED\s*STATES|DEPARTMENT\s*OF\s*STATE|US\s*PASSPORT/i.test(rawText) && !isIndianDoc;
 
   let nationality = isIndianDoc ? 'India' : isUsDoc ? 'United States' : 'India';
   let issuingCountry = isIndianDoc ? 'IND' : isUsDoc ? 'USA' : 'IND';
   let gender: 'M' | 'F' | 'X' = 'M';
-  let documentType: 'PASSPORT' | 'NATIONAL_ID' | 'DRIVERS_LICENSE' = isIndianDoc ? 'NATIONAL_ID' : 'NATIONAL_ID';
+  let documentType: 'PASSPORT' | 'NATIONAL_ID' | 'DRIVERS_LICENSE' = 'NATIONAL_ID';
   let mrzLine1 = '';
   let mrzLine2 = '';
 
@@ -340,16 +340,19 @@ export function parseDocumentText(rawText: string): ExtractedFields {
       }
     }
 
-    // Document Number / Identifier detection (supports slashes e.g. NIT/2025/1572, hyphens, alphanumeric)
+    // Document Number / Identifier detection (supports Aadhaar 4-4-4, slashes e.g. NIT/2025/1572, hyphens, alphanumeric)
     if (!documentNumber) {
+      const aadhaarMatch = line.match(/\b(\d{4}[\s.-]*\d{4}[\s.-]*\d{4})\b/);
       const docMatch = line.match(/(?:passport\s*(?:no|number)|doc(?:ument)?\s*(?:no|number)|dl\s*(?:no|number)|identity\s*(?:no|number)|id\s*(?:no|number|card)?|roll\s*(?:no|number)?|reg(?:istration)?\s*(?:no|number)?|card\s*(?:no|number)?|enrollment\s*(?:no|number)?|emp(?:loyee)?\s*(?:id|no)|student\s*(?:id|no)|number)[:\s.]+([A-Z0-9/-]{4,24})/i);
-      const aadhaarMatch = line.match(/\b(\d{4}\s\d{4}\s\d{4})\b/); // Aadhaar specific format XXXX XXXX XXXX
       
       if (aadhaarMatch) {
-        documentNumber = aadhaarMatch[1].replace(/\s/g, ''); // Store as continuous 12 digits
-        documentType = 'NATIONAL_ID';
-        issuingCountry = 'IND';
-        nationality = 'India';
+        const digits = aadhaarMatch[1].replace(/[^0-9]/g, '');
+        if (digits.length === 12) {
+          documentNumber = `${digits.slice(0, 4)} ${digits.slice(4, 8)} ${digits.slice(8, 12)}`;
+          documentType = 'NATIONAL_ID';
+          issuingCountry = 'IND';
+          nationality = 'India';
+        }
       } else if (docMatch && docMatch[1] && /[0-9]/.test(docMatch[1])) {
         documentNumber = docMatch[1].trim();
       } else if (/^(?:passport\s*(?:no|number)|doc(?:ument)?\s*(?:no|number)|dl\s*(?:no|number)|id\s*(?:no|number|card)?|roll\s*(?:no|number)|reg(?:istration)?\s*(?:no|number)?|card\s*(?:no|number)|student\s*id|number)\.?$/i.test(line)) {
@@ -368,15 +371,21 @@ export function parseDocumentText(rawText: string): ExtractedFields {
 
     // Date of Birth detection
     if (dateOfBirth === '1990-01-01') {
-      const dobMatch = line.match(/(?:date of birth|dob|birth|born)[:\s]+(\d{1,2}[\/\-\s][A-Za-z0-9]{2,4}[\/\-\s]\d{2,4})/i);
+      const dobMatch = line.match(/(?:date\s*of\s*birth|d\.?o\.?b\.?|birth|born|जन्म\s*तिथि|y\.?o\.?b\.?|year\s*of\s*birth)[\s/:.-]*\s*(\d{1,2}\s*[\/\-.]\s*\d{1,2}\s*[\/\-.]\s*\d{2,4}|\d{4})/i);
       if (dobMatch && dobMatch[1]) {
         dateOfBirth = normalizeDateString(dobMatch[1]);
-        // Aadhaar Fallback: Name is often immediately before DOB line
-        if (!fullName && i > 0 && isValidName(lines[i - 1])) {
-          fullName = cleanCandidateName(lines[i - 1]);
+        // Aadhaar / ID Card: Name is immediately before DOB line (check lines i-1, i-2, i-3)
+        if (!fullName && i > 0) {
+          for (let k = i - 1; k >= Math.max(0, i - 3); k--) {
+            const candidateRaw = lines[k].replace(/^\s*[^A-Za-z]+/, '').replace(/[^A-Za-z\s'-]/g, ' ').replace(/\s+/g, ' ').trim();
+            if (isValidName(candidateRaw)) {
+              fullName = cleanCandidateName(candidateRaw);
+              break;
+            }
+          }
         }
-      } else if (/^(?:date of birth|dob|birth|born)\.?$/i.test(line)) {
-        const nextDobMatch = nextLine.match(/(\d{1,2}[\/\-\s][A-Za-z0-9]{2,4}[\/\-\s]\d{2,4})/i);
+      } else if (/^(?:date\s*of\s*birth|d\.?o\.?b\.?|birth|born|जन्म\s*तिथि)\.?$/i.test(line)) {
+        const nextDobMatch = nextLine.match(/(\d{1,2}\s*[\/\-.]\s*\d{1,2}\s*[\/\-.]\s*\d{2,4}|\d{4})/i);
         if (nextDobMatch && nextDobMatch[1]) {
           dateOfBirth = normalizeDateString(nextDobMatch[1]);
         }
@@ -401,6 +410,10 @@ export function parseDocumentText(rawText: string): ExtractedFields {
       if (/^[MFX]$/i.test(nextLine)) {
         gender = nextLine.toUpperCase() as any;
       }
+    } else if (/\b(?:female|महिला|femme|woman)\b/i.test(line) || /\b(?:sex|gender)[\s:]*f\b/i.test(line)) {
+      gender = 'F';
+    } else if (/\b(?:male|पुरुष|homme|man)\b/i.test(line) || /\b(?:sex|gender)[\s:]*m\b/i.test(line)) {
+      gender = 'M';
     }
 
     // Country & Jurisdiction detection (Case-Insensitive)
@@ -437,15 +450,56 @@ export function parseDocumentText(rawText: string): ExtractedFields {
     }
   }
 
-  // If Indian document detected, check for 12-digit Aadhaar UID number anywhere in the text
-  if (isIndianDoc && (!documentNumber || documentNumber.length < 8)) {
-    const aadhaarFullMatch = rawText.match(/\b(\d{4}\s*\d{4}\s*\d{4})\b/);
-    if (aadhaarFullMatch) {
-      documentNumber = aadhaarFullMatch[1].replace(/\s+/g, ' ');
+  // 12-digit Aadhaar UID number anywhere in the text
+  const aadhaarGlobalMatch = rawText.match(/\b(\d{4}[\s.-]*\d{4}[\s.-]*\d{4})\b/);
+  if (aadhaarGlobalMatch) {
+    const digits = aadhaarGlobalMatch[1].replace(/[^0-9]/g, '');
+    if (digits.length === 12) {
+      documentNumber = `${digits.slice(0, 4)} ${digits.slice(4, 8)} ${digits.slice(8, 12)}`;
+      documentType = 'NATIONAL_ID';
+      issuingCountry = 'IND';
+      nationality = 'India';
     }
   }
 
+  // Global fallback for Date of Birth if still default
+  if (dateOfBirth === '1990-01-01') {
+    const genericDobMatch = rawText.match(/\b(0?[1-9]|[12][0-9]|3[01])[\/\-.](0?[1-9]|1[012])[\/\-.](19\d\d|20[01]\d)\b/);
+    if (genericDobMatch) {
+      dateOfBirth = `${genericDobMatch[3]}-${genericDobMatch[2].padStart(2, '0')}-${genericDobMatch[1].padStart(2, '0')}`;
+    }
+  }
+
+  // Global fallback for Gender
+  if (gender === 'M' && /\b(?:female|महिला|femme|woman)\b/i.test(rawText)) {
+    gender = 'F';
+  } else if (/\b(?:male|पुरुष|homme|man)\b/i.test(rawText)) {
+    gender = 'M';
+  }
+
   // Fallbacks if not recognized from visual zone
+  if (!fullName) {
+    // If we have a DOB line or pattern, check the 1-3 lines immediately preceding it
+    const dobIndex = lines.findIndex(l => /(?:date\s*of\s*birth|d\.?o\.?b\.?|birth|born|जन्म\s*तिथि|y\.?o\.?b\.?|year\s*of\s*birth)/i.test(l) || /\b(0?[1-9]|[12][0-9]|3[01])[\/\-.](0?[1-9]|1[012])[\/\-.](19\d\d|20[01]\d)\b/.test(l));
+    if (dobIndex > 0) {
+      for (let j = dobIndex - 1; j >= Math.max(0, dobIndex - 3); j--) {
+        const stripped = lines[j].replace(/^\s*[^A-Za-z]+/, '').replace(/[^A-Za-z\s'-]/g, ' ').replace(/\s+/g, ' ').trim();
+        const clean = cleanCandidateName(stripped);
+        const words = clean.split(/\s+/).filter((w) => w.length >= 2);
+        const hasVowels = words.every((w) => /[AEIOUY]/i.test(w) || /^NG$/i.test(w));
+        if (
+          words.length >= 2 &&
+          words.length <= 4 &&
+          hasVowels &&
+          !/PASSPORT|UNITED|AMERICA|IDENTITY|NATIONAL|COMMERCIAL|DRIVER|STATE|CALIFORNIA|AUSTRALIA|KINGDOM|DEPARTMENT|GOVERNMENT|REPUBLIC|NARULA|INSTITUTE|TECHNOLOGY|COLLEGE|UNIVERSITY|SESSION|BRANCH|STREAM|STUDENT|SIGNATURE|AADHAAR|BHARAT|INDIA/i.test(clean)
+        ) {
+          fullName = clean;
+          break;
+        }
+      }
+    }
+  }
+
   if (!fullName) {
     const candidates = extractNameCandidates(rawText);
     if (candidates.length > 0) {
@@ -453,19 +507,20 @@ export function parseDocumentText(rawText: string): ExtractedFields {
     } else {
       const candidateNameLine = lines.find(
         (l) => {
-          if (/\d/.test(l)) return false;
-          const clean = cleanCandidateName(l);
+          const stripped = l.replace(/^\s*\d+[\s.-]*/, '').replace(/[\s.-]*\d+\s*$/, '');
+          if (/\d{3,}/.test(stripped)) return false;
+          const clean = cleanCandidateName(stripped);
           const words = clean.split(/\s+/).filter((w) => w.length >= 2);
           const hasVowels = words.every(w => /[AEIOUY]/i.test(w) || /^NG$/i.test(w));
           return (
             words.length >= 2 &&
             words.length <= 4 &&
             hasVowels &&
-            !/PASSPORT|UNITED|AMERICA|IDENTITY|NATIONAL|COMMERCIAL|DRIVER|STATE|CALIFORNIA|AUSTRALIA|KINGDOM|DEPARTMENT|GOVERNMENT|REPUBLIC|NARULA|INSTITUTE|TECHNOLOGY|COLLEGE|UNIVERSITY|SESSION|BRANCH|STREAM|STUDENT|SIGNATURE/i.test(clean)
+            !/PASSPORT|UNITED|AMERICA|IDENTITY|NATIONAL|COMMERCIAL|DRIVER|STATE|CALIFORNIA|AUSTRALIA|KINGDOM|DEPARTMENT|GOVERNMENT|REPUBLIC|NARULA|INSTITUTE|TECHNOLOGY|COLLEGE|UNIVERSITY|SESSION|BRANCH|STREAM|STUDENT|SIGNATURE|AADHAAR|BHARAT|INDIA/i.test(clean)
           );
         }
       );
-      fullName = candidateNameLine ? cleanCandidateName(candidateNameLine) : '';
+      fullName = candidateNameLine ? cleanCandidateName(candidateNameLine.replace(/^\s*\d+[\s.-]*/, '').replace(/[\s.-]*\d+\s*$/, '')) : '';
     }
   }
 
@@ -494,8 +549,8 @@ export function parseDocumentText(rawText: string): ExtractedFields {
   const age = calculateAge(dateOfBirth);
 
   return {
-    fullName: fullName.toUpperCase(),
-    documentNumber: documentNumber.toUpperCase(),
+    fullName: (fullName || 'CARDHOLDER').toUpperCase(),
+    documentNumber: (documentNumber || ('ID-' + Math.floor(10000000 + Math.random() * 90000000))).toUpperCase(),
     dateOfBirth,
     age,
     nationality,
@@ -520,13 +575,15 @@ export function parseDocumentText(rawText: string): ExtractedFields {
  */
 export function normalizeDateString(dateStr: string): string {
   try {
+    const raw = (dateStr || '').trim();
+    const cleanDate = raw.replace(/\s+/g, '');
     const monthMap: Record<string, string> = {
       jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
       jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12'
     };
 
     // Format: DD MON YYYY (e.g. 14 JUN 1994, 21 SEP 1983)
-    const dmyWord = dateStr.match(/^(\d{1,2})[\/\-\s]+([A-Za-z]{3,4})[\/\-\s]+(\d{2,4})$/);
+    const dmyWord = raw.match(/^(\d{1,2})[\/\-\s]+([A-Za-z]{3,4})[\/\-\s]+(\d{2,4})$/);
     if (dmyWord) {
       const dd = dmyWord[1].padStart(2, '0');
       const mm = monthMap[dmyWord[2].toLowerCase().slice(0, 3)] || '01';
@@ -536,17 +593,23 @@ export function normalizeDateString(dateStr: string): string {
     }
 
     // Format: YYYY-MM-DD
-    const ymd = dateStr.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+    const ymd = cleanDate.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/);
     if (ymd) {
       return `${ymd[1]}-${ymd[2].padStart(2, '0')}-${ymd[3].padStart(2, '0')}`;
     }
 
-    // Format: DD-MM-YYYY or MM-DD-YYYY
-    const dmy = dateStr.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+    // Format: DD-MM-YYYY or MM-DD-YYYY or DD.MM.YYYY
+    const dmy = cleanDate.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
     if (dmy) {
       let yy = dmy[3];
       if (yy.length === 2) yy = (parseInt(yy, 10) > 40 ? '19' : '20') + yy;
       return `${yy}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}`;
+    }
+
+    // Format: YYYY only (e.g. Year of Birth: 1957)
+    const yOnly = cleanDate.match(/^(19\d\d|20[01]\d)$/);
+    if (yOnly) {
+      return `${yOnly[1]}-01-01`;
     }
   } catch {}
   return '1992-05-15';
@@ -815,15 +878,31 @@ export function extractNameCandidates(rawText: string): string[] {
     }
   }
 
+  // 3.5 Check for National ID / Aadhaar names immediately preceding DOB
+  const dobIdx = lines.findIndex(l => /(?:date\s*of\s*birth|d\.?o\.?b\.?|birth|born|जन्म\s*तिथि|y\.?o\.?b\.?|year\s*of\s*birth)/i.test(l) || /\b(0?[1-9]|[12][0-9]|3[01])[\/\-.](0?[1-9]|1[012])[\/\-.](19\d\d|20[01]\d)\b/.test(l));
+  if (dobIdx > 0) {
+    for (let k = dobIdx - 1; k >= Math.max(0, dobIdx - 3); k--) {
+      const candidateRaw = lines[k].replace(/^\s*[^A-Za-z]+/, '').replace(/[^A-Za-z\s'-]/g, ' ').replace(/\s+/g, ' ').trim();
+      if (isValidName(candidateRaw)) {
+        const clean = cleanCandidateName(candidateRaw);
+        if (clean && !candidates.includes(clean)) {
+          candidates.push(clean);
+        }
+        break;
+      }
+    }
+  }
+
   // 4. Lines that look like genuine person names (2 to 4 words, alphabetic only, no single-letter garbage like "BI CD")
   const validCandidates: { name: string; score: number }[] = candidates.map((c) => ({ name: c, score: 900 }));
   
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (line.includes('<')) continue; // Skip MRZ lines
-    if (/\d/.test(line)) continue; // Person names never contain numbers (filters addresses, phones, sessions)
-    if (!blacklist.test(line)) {
-      const clean = cleanCandidateName(line);
+    const stripped = line.replace(/^\s*\d+[\s.-]*/, '').replace(/[\s.-]*\d+\s*$/, '');
+    if (/\d{3,}/.test(stripped)) continue; // Person names never contain long numbers (filters addresses, phones, sessions)
+    if (!blacklist.test(stripped)) {
+      const clean = cleanCandidateName(stripped);
       const words = clean.split(/\s+/);
       const validWords = words.filter((w) => w.length >= 3 || ['MD', 'SK', 'DR', 'MR'].includes(w));
       

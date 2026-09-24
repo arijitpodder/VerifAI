@@ -227,7 +227,7 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
       try {
         const ocrResult = await runRealOcr(uri);
         const candidates = extractNameCandidates(ocrResult.rawText);
-        const primaryOcrName = (ocrResult.fields.fullName && ocrResult.fields.fullName !== 'NOT_DETECTED')
+        const primaryOcrName = (ocrResult.fields.fullName && ocrResult.fields.fullName !== 'NOT_DETECTED' && ocrResult.fields.fullName !== 'CARDHOLDER')
           ? cleanCandidateName(ocrResult.fields.fullName)
           : '';
 
@@ -283,7 +283,7 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
       try {
         const ocrResult = await runRealOcr(rotated);
         const candidates = extractNameCandidates(ocrResult.rawText);
-        const primaryOcrName = (ocrResult.fields.fullName && ocrResult.fields.fullName !== 'NOT_DETECTED')
+        const primaryOcrName = (ocrResult.fields.fullName && ocrResult.fields.fullName !== 'NOT_DETECTED' && ocrResult.fields.fullName !== 'CARDHOLDER')
           ? cleanCandidateName(ocrResult.fields.fullName)
           : '';
 

@@ -184,30 +184,34 @@ export const IdVerificationLab: React.FC<IdVerificationLabProps> = ({
     setActivePresetId('custom');
     setOcrProgress({ status: 'Starting client-side OCR engine...', progress: 15 });
 
-    const result = await runRealOcr(imgUri, (p) => {
-      setOcrProgress(p);
-    });
+    try {
+      const result = await runRealOcr(imgUri, (p) => {
+        setOcrProgress(p);
+      });
 
-    setRawOcrText(result.rawText);
-    setFields(result.fields);
+      setRawOcrText(result.rawText);
+      setFields(result.fields);
 
-    const cRes = validateConsistency(result.fields);
-    setConsistency(cRes);
+      const cRes = validateConsistency(result.fields);
+      setConsistency(cRes);
 
-    // Real pixel forensics on uploaded image
-    const fRes = await runForensicsAnalysis(imgUri, [], false, elaAmplifier);
-    setForensics(fRes);
+      // Real pixel forensics on uploaded image
+      const fRes = await runForensicsAnalysis(imgUri, [], false, elaAmplifier);
+      setForensics(fRes);
 
-    const authRes = await queryAuthorityRegistry(
-      result.fields.documentNumber,
-      result.fields.documentType,
-      result.fields.fullName,
-      authorityStatus
-    );
-    setAuthorityResult(authRes);
-
-    setIsOcrRunning(false);
-    onSyncWithMainPipeline(imgUri, result.fields, cRes, fRes, authRes);
+      const authRes = await queryAuthorityRegistry(
+        result.fields.documentNumber,
+        result.fields.documentType,
+        result.fields.fullName,
+        authorityStatus
+      );
+      setAuthorityResult(authRes);
+      onSyncWithMainPipeline(imgUri, result.fields, cRes, fRes, authRes);
+    } catch (err) {
+      console.error('Error during OCR in IdVerificationLab:', err);
+    } finally {
+      setIsOcrRunning(false);
+    }
   };
 
   // Live Camera Capture

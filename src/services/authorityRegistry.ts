@@ -4,9 +4,9 @@ import type { AuthorityCheckResult, AuthorityRecordStatus } from '../types';
  * Simulates a government identity registry / INTERPOL SLTD query
  */
 export async function queryAuthorityRegistry(
-  docNumber: string,
-  docType: string,
-  holderName: string,
+  docNumber?: string,
+  docType?: string,
+  holderName?: string,
   presetStatus?: AuthorityRecordStatus,
   presetInterpol?: boolean,
   presetNotes?: string
@@ -20,6 +20,11 @@ export async function queryAuthorityRegistry(
   const ledgerTxHash = '0x' + Array.from({ length: 32 }, () =>
     Math.floor(Math.random() * 16).toString(16)
   ).join('');
+
+  const safeDocType = docType || 'NATIONAL_ID';
+  const rawDocNumber = (docNumber || 'DOC-000000').toString();
+  const safeDocNumClean = rawDocNumber.replace(/[^A-Za-z0-9]/g, '') || '000000';
+  const safeHolderName = (holderName || 'Cardholder').toString();
 
   // If preset is explicitly provided (for demo scenarios)
   if (presetStatus) {
@@ -42,9 +47,9 @@ export async function queryAuthorityRegistry(
 
     return {
       queryStatus,
-      registryName: getRegistryNameForDocType(docType),
-      recordId: `REG-${docNumber.replace(/[^A-Za-z0-9]/g, '')}`,
-      issuedTo: holderName,
+      registryName: getRegistryNameForDocType(safeDocType),
+      recordId: `REG-${safeDocNumClean}`,
+      issuedTo: safeHolderName,
       activeStatus: presetStatus,
       interpolStolenRecord: !!presetInterpol,
       issuanceTimestamp: '2021-04-14T09:30:00Z',
@@ -59,9 +64,9 @@ export async function queryAuthorityRegistry(
   // Default fallback for custom user uploads
   return {
     queryStatus: 'MATCH_FOUND',
-    registryName: getRegistryNameForDocType(docType),
-    recordId: `REG-${docNumber.replace(/[^A-Za-z0-9]/g, '')}`,
-    issuedTo: holderName,
+    registryName: getRegistryNameForDocType(safeDocType),
+    recordId: `REG-${safeDocNumClean}`,
+    issuedTo: safeHolderName,
     activeStatus: 'ACTIVE',
     interpolStolenRecord: false,
     issuanceTimestamp: new Date().toISOString(),
@@ -73,7 +78,7 @@ export async function queryAuthorityRegistry(
   };
 }
 
-function getRegistryNameForDocType(docType: string): string {
+function getRegistryNameForDocType(docType?: string): string {
   switch (docType) {
     case 'PASSPORT':
       return 'ICAO PKD & INTERPOL SLTD Global Gateway';
