@@ -38,7 +38,6 @@ import { IdFaceMatchLab } from './components/IdFaceMatchLab';
 import { HiggsfieldMotionCanvas } from './components/HiggsfieldMotionCanvas';
 import type { CanvasMode } from './components/HiggsfieldMotionCanvas';
 import { CyberBootIntro } from './components/CyberBootIntro';
-import { DhurandharMusicPlayer } from './components/DhurandharMusicPlayer';
 import { RefreshCw } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -760,8 +759,6 @@ export const App: React.FC = () => {
         </div>
       </footer>
 
-      {/* Persistent Viral Dhurandhar: Get Ready Dhurandhar Music Player */}
-      <DhurandharMusicPlayer />
     </div>
   );
 };

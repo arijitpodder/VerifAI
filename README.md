@@ -156,7 +156,6 @@ VerifAI was engineered with strict performance constraints to eliminate browser 
   - 🌌 **Deep Space Nebula**
   - ⚡ **Quantum Cyan**
 - **Futuristic Audio FX**: High-tech tactile sound effects for laser sweeps, biometric locks, countdown chimes, and verification confirmations, with one-click master mute controls.
-- **Soundtrack Integration**: Features the energetic *Get Ready Dhurandhar* title soundtrack.
 
 ---
 

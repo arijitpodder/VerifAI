@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { dhurandharAudio } from '../services/dhurandharAudioService';
 import { soundEffects } from '../services/soundEffects';
-import { Play, Pause, ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 
 interface CyberBootIntroProps {
   onComplete: () => void;
@@ -21,7 +20,6 @@ export const CyberBootIntro: React.FC<CyberBootIntroProps> = ({ onComplete }) =>
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [currentSceneIndex, setCurrentSceneIndex] = useState(0);
   const [isDismissing, setIsDismissing] = useState(false);
-  const [isPlayingAudio, setIsPlayingAudio] = useState(dhurandharAudio.isMusicPlaying());
   const [progress, setProgress] = useState(0);
 
   const getAssetPath = (path: string) => {
@@ -80,31 +78,8 @@ export const CyberBootIntro: React.FC<CyberBootIntroProps> = ({ onComplete }) =>
     }
   ];
 
-  // Subscribe to audio state
+  // Fast scene progression loop
   useEffect(() => {
-    const unsub = dhurandharAudio.subscribe((playing) => {
-      setIsPlayingAudio(playing);
-    });
-    return () => {
-      unsub();
-    };
-  }, []);
-
-  // Preload all 5 development showcase images immediately on mount
-  useEffect(() => {
-    scenes.forEach((scene) => {
-      const img = new Image();
-      img.src = scene.image;
-    });
-  }, []);
-
-  // Automatic audio start & Fast scene progression loop
-  useEffect(() => {
-    try {
-      dhurandharAudio.startMusic();
-    } catch {
-      // Audio waiting for interaction
-    }
 
     // Fast 750ms switching so all 5 images cycle quickly and distinctly
     const sceneInterval = setInterval(() => {
@@ -133,16 +108,9 @@ export const CyberBootIntro: React.FC<CyberBootIntroProps> = ({ onComplete }) =>
     };
   }, []);
 
-  const handleToggleAudio = (e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    dhurandharAudio.toggleMusic();
-  };
-
   const handleFinish = () => {
     setIsDismissing(true);
     soundEffects.playLockOn();
-    // Ensure music keeps playing smoothly into the site
-    dhurandharAudio.startMusic();
     window.dispatchEvent(new CustomEvent('higgsfield-pulse', { detail: { color: '#ff9933' } }));
     setTimeout(() => {
       onComplete();
@@ -286,11 +254,6 @@ export const CyberBootIntro: React.FC<CyberBootIntroProps> = ({ onComplete }) =>
 
   return (
     <div
-      onClick={() => {
-        if (!isPlayingAudio) {
-          dhurandharAudio.startMusic();
-        }
-      }}
       style={{
         position: 'fixed',
         inset: 0,
@@ -305,7 +268,7 @@ export const CyberBootIntro: React.FC<CyberBootIntroProps> = ({ onComplete }) =>
         color: '#f8fafc',
         opacity: isDismissing ? 0 : 1,
         transition: 'opacity 0.5s ease',
-        cursor: 'pointer'
+        cursor: 'default'
       }}
     >
       {/* 1. Cinematic Background Video Transition Showcase */}
@@ -397,36 +360,8 @@ export const CyberBootIntro: React.FC<CyberBootIntroProps> = ({ onComplete }) =>
           </span>
         </div>
 
-        {/* Top Right Controls: Pause Only & Skip */}
+        {/* Top Right Controls: Skip */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {/* Pause / Play Only Button */}
-          <button
-            onClick={handleToggleAudio}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '7px 16px',
-              borderRadius: 99,
-              background: isPlayingAudio
-                ? 'linear-gradient(135deg, #138808, #10b981)'
-                : 'linear-gradient(135deg, #ff9933, #e67300)',
-              border: 'none',
-              color: '#ffffff',
-              fontSize: '11px',
-              fontWeight: 800,
-              cursor: 'pointer',
-              fontFamily: 'var(--font-mono)',
-              boxShadow: isPlayingAudio
-                ? '0 0 15px rgba(16, 185, 129, 0.45)'
-                : '0 0 15px rgba(255, 153, 51, 0.45)'
-            }}
-            title={isPlayingAudio ? 'Pause Audio' : 'Play Audio'}
-          >
-            {isPlayingAudio ? <Pause size={13} fill="#ffffff" /> : <Play size={13} fill="#ffffff" />}
-            <span>{isPlayingAudio ? 'PAUSE' : 'PLAY'}</span>
-          </button>
-
           {/* Skip Button */}
           <button
             onClick={(e) => {
