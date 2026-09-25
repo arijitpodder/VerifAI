@@ -5,6 +5,15 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [react()],
   base: process.env.NODE_ENV === 'production' ? '/VerifAI/' : '/',
+  build: {
+    rollupOptions: {
+      output: {
+        entryFileNames: 'assets/[name]-[hash].js',
+        chunkFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]'
+      }
+    }
+  },
   server: {
     proxy: {
       '/api-proxy/gemini': {

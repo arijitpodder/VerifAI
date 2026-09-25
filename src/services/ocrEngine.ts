@@ -102,7 +102,7 @@ export async function runRealOcr(
     );
 
     const timeoutPromise = new Promise<{ data: { text: string } }>((_, reject) =>
-      setTimeout(() => reject(new Error('OCR recognition timeout')), 12000)
+      setTimeout(() => reject(new Error('OCR recognition timeout')), 25000)
     );
 
     const result = await Promise.race([ocrPromise, timeoutPromise]);
