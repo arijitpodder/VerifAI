@@ -1,4 +1,5 @@
 // Verification test for mismatch calibration logic
+export {};
 
 function calibrateScores(rawCompositeScore: number, passThreshold: number, subScores: Record<string, number>) {
   const matchPassed = rawCompositeScore >= passThreshold;

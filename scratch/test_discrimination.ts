@@ -1,4 +1,5 @@
 // Anthropometric and biometric discrimination test script
+export {};
 
 interface FaceLandmarkProfile {
   name: string;

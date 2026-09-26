@@ -1,8 +1,40 @@
-import {
-  extractAnthropometricProfile,
-  computeAnthropometricShapeDivergence,
-  evaluateBiometrics
-} from '../src/services/biometricsEngine';
+import { evaluateBiometrics } from '../src/services/biometricsEngine';
+export {};
+
+// Local implementations (these helpers are not exported from biometricsEngine)
+interface AnthropometricProfile {
+  meanLuminance: number;
+  eyeBandMean: number;
+  mouthBandMean: number;
+  faceFraction: number;
+}
+
+function extractAnthropometricProfile(lum: Float32Array, size: number): AnthropometricProfile {
+  let facePixels = 0, totalLum = 0, eyeLum = 0, eyeCount = 0, mouthLum = 0, mouthCount = 0;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const v = lum[y * size + x];
+      if (v > 0) { totalLum += v; facePixels++; }
+      if (y >= size * 0.35 && y <= size * 0.40) { eyeLum += v; eyeCount++; }
+      if (y >= size * 0.65 && y <= size * 0.75) { mouthLum += v; mouthCount++; }
+    }
+  }
+  return {
+    meanLuminance: facePixels > 0 ? totalLum / facePixels : 0,
+    eyeBandMean: eyeCount > 0 ? eyeLum / eyeCount : 0,
+    mouthBandMean: mouthCount > 0 ? mouthLum / mouthCount : 0,
+    faceFraction: facePixels / (size * size)
+  };
+}
+
+function computeAnthropometricShapeDivergence(a: AnthropometricProfile, b: AnthropometricProfile): number {
+  const diffLum = Math.abs(a.meanLuminance - b.meanLuminance) / Math.max(a.meanLuminance, b.meanLuminance, 1);
+  const diffEye = Math.abs(a.eyeBandMean - b.eyeBandMean) / Math.max(a.eyeBandMean, b.eyeBandMean, 1);
+  const diffMouth = Math.abs(a.mouthBandMean - b.mouthBandMean) / Math.max(a.mouthBandMean, b.mouthBandMean, 1);
+  const diffFace = Math.abs(a.faceFraction - b.faceFraction) / Math.max(a.faceFraction, b.faceFraction, 1);
+  return diffLum * 0.25 + diffEye * 0.35 + diffMouth * 0.25 + diffFace * 0.15;
+}
+
 
 console.log('=== VERIFAI BIOMETRICS CALIBRATION & DISCRIMINATION VERIFICATION ===\n');
 
