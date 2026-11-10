@@ -140,8 +140,17 @@ export function setStoredApiKey(_provider: 'gemini' | 'openai' | 'groq', _key: s
 }
 
 /**
- * Resolves optimal API endpoint via Vite reverse proxy on localhost to prevent CORS rejections
+ * Resolves optimal API endpoint via direct cloud API or Vite reverse proxy
  */
+function getApiEndpoints(provider: 'gemini' | 'groq' | 'openai', directBase: string, path: string): string[] {
+  const direct = `${directBase}${path}`;
+  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    // Return proxy first on localhost dev server, with direct cloud as instant fallback
+    return [`/api-proxy/${provider}${path}`, direct];
+  }
+  return [direct];
+}
+
 function getApiEndpoint(provider: 'gemini' | 'groq' | 'openai', directBase: string, path: string): string {
   if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
     return `/api-proxy/${provider}${path}`;
@@ -314,7 +323,7 @@ export async function verifyWithOurAi(
 }
 
 /**
- * 2. GOOGLE GEMINI AI (Gemini 3.6 Flash / 3.1 Flash Lite)
+ * 2. GOOGLE GEMINI AI (Gemini 3.5 Flash Lite / 3.1 Flash Lite)
  */
 export async function verifyWithGeminiVision(
   refPhotoUri: string,
@@ -327,8 +336,8 @@ export async function verifyWithGeminiVision(
 
   let liveTelemetry: LiveApiTelemetry = {
     provider: 'gemini',
-    displayName: 'Google Gemini AI (Flash Vision)',
-    model: 'gemini-flash-lite-latest',
+    displayName: 'Google Gemini AI (Flash Lite)',
+    model: 'gemini-3.5-flash-lite',
     endpoint: 'generativelanguage.googleapis.com',
     httpStatus: 0,
     statusText: 'Connecting to Google API...',
@@ -345,96 +354,101 @@ export async function verifyWithGeminiVision(
     ]);
 
     const candidateModels = [
-      'gemini-flash-lite-latest',
       'gemini-3.5-flash-lite',
-      'gemini-2.5-flash',
-      'gemini-3.6-flash'
+      'gemini-3.1-flash-lite',
+      'gemini-flash-lite-latest',
+      'gemini-2.5-flash-lite'
     ];
     const promptText = buildBiometricPrompt(compMetrics);
 
     for (const model of candidateModels) {
-      try {
-        const endpoint = getApiEndpoint(
-          'gemini',
-          'https://generativelanguage.googleapis.com',
-          `/v1beta/models/${model}:generateContent?key=${activeKey}`
-        );
+      const endpoints = getApiEndpoints(
+        'gemini',
+        'https://generativelanguage.googleapis.com',
+        `/v1beta/models/${model}:generateContent?key=${activeKey}`
+      );
 
-        const payload = {
-          contents: [
-            {
-              parts: [
-                { text: promptText },
-                { inline_data: { mime_type: imgA.mimeType, data: imgA.base64 } },
-                { inline_data: { mime_type: imgB.mimeType, data: imgB.base64 } }
-              ]
+      for (const endpoint of endpoints) {
+        try {
+          const payload = {
+            contents: [
+              {
+                parts: [
+                  { text: promptText },
+                  { inline_data: { mime_type: imgA.mimeType, data: imgA.base64 } },
+                  { inline_data: { mime_type: imgB.mimeType, data: imgB.base64 } }
+                ]
+              }
+            ],
+            generationConfig: {
+              temperature: 0.1,
+              responseMimeType: 'application/json'
             }
-          ],
-          generationConfig: {
-            temperature: 0.1,
-            responseMimeType: 'application/json'
+          };
+
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            signal: AbortSignal.timeout(10000)
+          });
+
+          const latencyMs = Math.round(performance.now() - startTime);
+          liveTelemetry.httpStatus = response.status;
+          liveTelemetry.latencyMs = latencyMs;
+          liveTelemetry.model = model;
+
+          if (response.ok) {
+            const data = await response.json();
+            let rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (rawText) {
+              rawText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+              const parsed = JSON.parse(rawText);
+              const isSamePerson = Boolean(parsed.isSamePerson);
+              let confidenceScore = Math.max(0, Math.min(100, Math.round(Number(parsed.confidenceScore) || 50)));
+
+              if (isSamePerson && confidenceScore < 80) confidenceScore = 91;
+              if (!isSamePerson && confidenceScore > 40) confidenceScore = 18;
+
+              const verdict: AIVisionResult['verdict'] = isSamePerson
+                ? confidenceScore >= 80 ? 'HIGH_MATCH' : 'MODERATE_MATCH'
+                : 'DIVERGENCE_MISMATCH';
+
+              liveTelemetry.statusText = '200 OK (Google DeepMind Cloud)';
+              liveTelemetry.isLiveCloud = true;
+              liveTelemetry.isExempted = false;
+
+              return {
+                provider: 'gemini',
+                displayName: `Google Gemini AI (${model})`,
+                model,
+                isSamePerson,
+                confidenceScore,
+                verdict,
+                reasoning: parsed.reasoning || (isSamePerson ? 'Gemini AI confirms pupillary distance, temple width, and cranial landmarks match.' : 'Gemini AI detected biometric divergence.'),
+                structuralScore: Math.round(Number(parsed.structuralScore) || (isSamePerson ? 93 : 24)),
+                proportionScore: Math.round(Number(parsed.proportionScore) || (isSamePerson ? 92 : 28)),
+                featureScore: Math.round(Number(parsed.featureScore) || (isSamePerson ? 94 : 22)),
+                edgeScore: Math.round(Number(parsed.edgeScore) || (isSamePerson ? 90 : 30)),
+                colorScore: Math.round(Number(parsed.colorScore) || (isSamePerson ? 86 : 35)),
+                breakdown: {
+                  pupillaryDistancePD: parsed.pupillaryDistancePD || (isSamePerson ? 'Ocular canthi & PD aligned (2.8% delta)' : 'Pupillary distance disparity'),
+                  templeWidth: parsed.templeWidth || (isSamePerson ? 'Bitemporal breadth conforms to ID' : 'Bitemporal width mismatch'),
+                  facialSymmetry: parsed.facialSymmetry || (isSamePerson ? 'Bilateral symmetry index 95.4%' : 'Facial asymmetry deviation'),
+                  facialStructure: parsed.facialStructure || (isSamePerson ? 'Cranial vault and jawline contour verified' : 'Cranial elongation mismatch')
+                },
+                telemetry: liveTelemetry
+              };
+            }
+          } else if (response.status === 429) {
+            liveTelemetry.statusText = '429 Rate Limit (Exempted from calculation)';
+            liveTelemetry.isExempted = true;
+          } else {
+            console.warn(`Gemini model ${model} endpoint returned HTTP ${response.status}. Trying next option...`);
           }
-        };
-
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-          signal: AbortSignal.timeout(6000)
-        });
-
-        const latencyMs = Math.round(performance.now() - startTime);
-        liveTelemetry.httpStatus = response.status;
-        liveTelemetry.latencyMs = latencyMs;
-        liveTelemetry.model = model;
-
-        if (response.ok) {
-          const data = await response.json();
-          const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (rawText) {
-            const parsed = JSON.parse(rawText);
-            const isSamePerson = Boolean(parsed.isSamePerson);
-            let confidenceScore = Math.max(0, Math.min(100, Math.round(Number(parsed.confidenceScore) || 50)));
-
-            if (isSamePerson && confidenceScore < 80) confidenceScore = 91;
-            if (!isSamePerson && confidenceScore > 40) confidenceScore = 18;
-
-            const verdict: AIVisionResult['verdict'] = isSamePerson
-              ? confidenceScore >= 80 ? 'HIGH_MATCH' : 'MODERATE_MATCH'
-              : 'DIVERGENCE_MISMATCH';
-
-            liveTelemetry.statusText = '200 OK (Google DeepMind Cloud)';
-            liveTelemetry.isLiveCloud = true;
-            liveTelemetry.isExempted = false;
-
-            return {
-              provider: 'gemini',
-              displayName: `Google Gemini AI (${model})`,
-              model,
-              isSamePerson,
-              confidenceScore,
-              verdict,
-              reasoning: parsed.reasoning || (isSamePerson ? 'Gemini AI confirms pupillary distance, temple width, and cranial landmarks match.' : 'Gemini AI detected biometric divergence.'),
-              structuralScore: Math.round(Number(parsed.structuralScore) || (isSamePerson ? 93 : 24)),
-              proportionScore: Math.round(Number(parsed.proportionScore) || (isSamePerson ? 92 : 28)),
-              featureScore: Math.round(Number(parsed.featureScore) || (isSamePerson ? 94 : 22)),
-              edgeScore: Math.round(Number(parsed.edgeScore) || (isSamePerson ? 90 : 30)),
-              colorScore: Math.round(Number(parsed.colorScore) || (isSamePerson ? 86 : 35)),
-              breakdown: {
-                pupillaryDistancePD: parsed.pupillaryDistancePD || (isSamePerson ? 'Ocular canthi & PD aligned (2.8% delta)' : 'Pupillary distance disparity'),
-                templeWidth: parsed.templeWidth || (isSamePerson ? 'Bitemporal breadth conforms to ID' : 'Bitemporal width mismatch'),
-                facialSymmetry: parsed.facialSymmetry || (isSamePerson ? 'Bilateral symmetry index 95.4%' : 'Facial asymmetry deviation'),
-                facialStructure: parsed.facialStructure || (isSamePerson ? 'Cranial vault and jawline contour verified' : 'Cranial elongation mismatch')
-              },
-              telemetry: liveTelemetry
-            };
-          }
-        } else if (response.status === 429) {
-          liveTelemetry.statusText = '429 Rate Limit (Exempted from calculation)';
-          liveTelemetry.isExempted = true;
+        } catch (err: any) {
+          liveTelemetry.errorDetail = err?.message || 'Network error';
         }
-      } catch (err: any) {
-        liveTelemetry.errorDetail = err?.message || 'Network error';
       }
     }
   } catch (err: any) {
@@ -448,7 +462,7 @@ export async function verifyWithGeminiVision(
   return {
     provider: 'gemini',
     displayName: 'Google Gemini AI (Flash Lite)',
-    model: 'gemini-flash-lite-latest',
+    model: 'gemini-3.5-flash-lite',
     isSamePerson: false,
     confidenceScore: 0,
     verdict: 'DIVERGENCE_MISMATCH',
@@ -483,7 +497,7 @@ export async function verifyWithGroqVision(
   let liveTelemetry: LiveApiTelemetry = {
     provider: 'groq',
     displayName: 'Groq LPU AI (Ultra-Fast Inference)',
-    model: 'openai/gpt-oss-20b',
+    model: 'qwen/qwen3.8-27b',
     endpoint: 'api.groq.com',
     httpStatus: 0,
     statusText: 'Connecting to Groq LPU API...',
@@ -494,51 +508,56 @@ export async function verifyWithGroqVision(
   };
 
   try {
-    const candidateModels = ['openai/gpt-oss-20b', 'qwen/qwen3.8-27b', 'groq/compound', 'openai/gpt-oss-120b'];
+    const candidateModels = [
+      'qwen/qwen3.8-27b',
+      'openai/gpt-oss-20b',
+      'openai/gpt-oss-120b'
+    ];
     const promptText = buildBiometricPrompt(compMetrics);
 
     for (const model of candidateModels) {
-      try {
-        const endpoint = getApiEndpoint('groq', 'https://api.groq.com', '/openai/v1/chat/completions');
+      const endpoints = getApiEndpoints('groq', 'https://api.groq.com', '/openai/v1/chat/completions');
 
-        const payload = {
-          model,
-          messages: [
-            {
-              role: 'system',
-              content: 'You are an ultra-fast LPU forensic computer vision biometric identity examiner. Always return a valid JSON object strictly matching the requested schema.'
+      for (const endpoint of endpoints) {
+        try {
+          const payload = {
+            model,
+            messages: [
+              {
+                role: 'system',
+                content: 'You are an ultra-fast LPU forensic computer vision biometric identity examiner. Always return a valid JSON object strictly matching the requested schema.'
+              },
+              {
+                role: 'user',
+                content: promptText
+              }
+            ],
+            response_format: { type: 'json_object' },
+            max_tokens: 1500,
+            temperature: 0.1
+          };
+
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${activeKey}`
             },
-            {
-              role: 'user',
-              content: promptText
-            }
-          ],
-          response_format: { type: 'json_object' },
-          max_tokens: 500,
-          temperature: 0.1
-        };
+            body: JSON.stringify(payload),
+            signal: AbortSignal.timeout(10000)
+          });
 
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${activeKey}`
-          },
-          body: JSON.stringify(payload),
-          signal: AbortSignal.timeout(6000)
-        });
+          const latencyMs = Math.round(performance.now() - startTime);
+          liveTelemetry.httpStatus = response.status;
+          liveTelemetry.latencyMs = latencyMs;
+          liveTelemetry.model = model;
 
-        const latencyMs = Math.round(performance.now() - startTime);
-        liveTelemetry.httpStatus = response.status;
-        liveTelemetry.latencyMs = latencyMs;
-        liveTelemetry.model = model;
+          if (!response.ok) {
+            console.warn(`Groq candidate model ${model} on ${endpoint} returned HTTP ${response.status}. Attempting next option...`);
+            continue;
+          }
 
-        if (!response.ok) {
-          console.warn(`Groq candidate model ${model} returned HTTP ${response.status}. Attempting failover...`);
-          continue;
-        }
-
-        const data = await response.json();
+          const data = await response.json();
           let rawText = data?.choices?.[0]?.message?.content;
           if (rawText) {
             rawText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
@@ -585,7 +604,8 @@ export async function verifyWithGroqVision(
             };
           }
         } catch (err: any) {
-        liveTelemetry.errorDetail = err?.message || 'Network error';
+          liveTelemetry.errorDetail = err?.message || 'Network error';
+        }
       }
     }
   } catch (err: any) {
@@ -599,7 +619,7 @@ export async function verifyWithGroqVision(
   return {
     provider: 'groq',
     displayName: 'Groq LPU AI',
-    model: 'openai/gpt-oss-20b',
+    model: 'qwen/qwen3.8-27b',
     isSamePerson: false,
     confidenceScore: 0,
     verdict: 'DIVERGENCE_MISMATCH',
@@ -914,7 +934,7 @@ Return strictly valid JSON with these fields:
       const endpoint = getApiEndpoint(
         'gemini',
         'https://generativelanguage.googleapis.com',
-        `/v1beta/models/gemini-3.6-flash:generateContent?key=${geminiKey.trim()}`
+        `/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${geminiKey.trim()}`
       );
       const payload = {
         contents: [

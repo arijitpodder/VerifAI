@@ -78,9 +78,17 @@ export const CyberBootIntro: React.FC<CyberBootIntroProps> = ({ onComplete }) =>
     }
   ];
 
+  const handleFinish = () => {
+    setIsDismissing(true);
+    soundEffects.playLockOn();
+    window.dispatchEvent(new CustomEvent('higgsfield-pulse', { detail: { color: '#ff9933' } }));
+    setTimeout(() => {
+      onComplete();
+    }, 500);
+  };
+
   // Fast scene progression loop
   useEffect(() => {
-
     // Fast 750ms switching so all 5 images cycle quickly and distinctly
     const sceneInterval = setInterval(() => {
       setCurrentSceneIndex((prev) => (prev + 1) % scenes.length);
@@ -106,16 +114,7 @@ export const CyberBootIntro: React.FC<CyberBootIntroProps> = ({ onComplete }) =>
       clearInterval(sceneInterval);
       clearInterval(progressInterval);
     };
-  }, []);
-
-  const handleFinish = () => {
-    setIsDismissing(true);
-    soundEffects.playLockOn();
-    window.dispatchEvent(new CustomEvent('higgsfield-pulse', { detail: { color: '#ff9933' } }));
-    setTimeout(() => {
-      onComplete();
-    }, 500);
-  };
+  }, [scenes.length]);
 
   // 🇮🇳 Dazzling Light Effects & Higgsfield Quantum Waves Canvas Animation
   useEffect(() => {

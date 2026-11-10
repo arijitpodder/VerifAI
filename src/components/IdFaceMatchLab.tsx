@@ -103,6 +103,27 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
   const imageContainerRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
 
+  // Update extracted photo when crop box changes & verify human face quality
+  const updateCropPreview = async (box: DetectedFaceBox) => {
+    try {
+      const cropped = await cropFaceByPercentage(idCardUri, box);
+      setExtractedPhotoUri(cropped);
+      const quality = await checkCropQualityFromUri(cropped);
+      setCropFaceQuality(quality);
+    } catch (e) {
+      console.warn('Error cropping preview:', e);
+    }
+  };
+
+  // Stop Webcam
+  const stopWebcam = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    setIsWebcamActive(false);
+  };
+
   // Initialize initial extracted photo on mount
   useEffect(() => {
     updateCropPreview(cropBox);
@@ -130,27 +151,6 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
       stopWebcam();
     };
   }, []);
-
-  // Update extracted photo when crop box changes & verify human face quality
-  const updateCropPreview = async (box: DetectedFaceBox) => {
-    try {
-      const cropped = await cropFaceByPercentage(idCardUri, box);
-      setExtractedPhotoUri(cropped);
-      const quality = await checkCropQualityFromUri(cropped);
-      setCropFaceQuality(quality);
-    } catch (e) {
-      console.warn('Error cropping preview:', e);
-    }
-  };
-
-  // Stop Webcam
-  const stopWebcam = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
-    setIsWebcamActive(false);
-  };
 
   // Start Webcam with fallback
   const startWebcam = async () => {

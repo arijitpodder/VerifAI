@@ -54,11 +54,6 @@ export const FaceVerificationLab: React.FC<FaceVerificationLabProps> = ({
   const refUploadInputRef = useRef<HTMLInputElement>(null);
   const selfieUploadInputRef = useRef<HTMLInputElement>(null);
 
-  // Run initial authentic comparison
-  useEffect(() => {
-    runComparison(refPhotoUri, livePhotoUri);
-  }, []);
-
   // Stop webcam helper
   const stopWebcam = () => {
     if (streamRef.current) {
@@ -89,13 +84,6 @@ export const FaceVerificationLab: React.FC<FaceVerificationLabProps> = ({
     }
   };
 
-  // Cleanup
-  useEffect(() => {
-    return () => {
-      stopWebcam();
-    };
-  }, []);
-
   // Compute authentic comparison
   const runComparison = async (refUri: string, liveUri: string) => {
     setIsComparing(true);
@@ -114,6 +102,18 @@ export const FaceVerificationLab: React.FC<FaceVerificationLabProps> = ({
     );
     onSyncBiometrics(bioResult);
   };
+
+  // Run initial authentic comparison
+  useEffect(() => {
+    runComparison(refPhotoUri, livePhotoUri);
+  }, []);
+
+  // Cleanup
+  useEffect(() => {
+    return () => {
+      stopWebcam();
+    };
+  }, []);
 
   // Handle Reference Upload (Auto-isolates face if user uploads full document)
   const handleRefUpload = (file: File) => {
