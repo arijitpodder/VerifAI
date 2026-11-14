@@ -87,7 +87,29 @@ export const CyberBootIntro: React.FC<CyberBootIntroProps> = ({ onComplete }) =>
     }, 500);
   };
 
-  // Fast scene progression loop
+  // Keyboard shortcut: Escape to skip intro immediately
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleFinish();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Pre-decode all 5 development showcase images in the background thread for silky smooth transitions
+  useEffect(() => {
+    scenes.forEach((scene) => {
+      const img = new Image();
+      img.src = scene.image;
+      if ('decode' in img) {
+        img.decode().catch(() => {});
+      }
+    });
+  }, [scenes]);
+
+  // Fast scene progression loop with optimized intervals to prevent main-thread freeze
   useEffect(() => {
     // Fast 750ms switching so all 5 images cycle quickly and distinctly
     const sceneInterval = setInterval(() => {
@@ -108,7 +130,7 @@ export const CyberBootIntro: React.FC<CyberBootIntroProps> = ({ onComplete }) =>
           handleFinish();
         }, 300);
       }
-    }, 75);
+    }, 120);
 
     return () => {
       clearInterval(sceneInterval);
@@ -128,6 +150,8 @@ export const CyberBootIntro: React.FC<CyberBootIntroProps> = ({ onComplete }) =>
     let height = (canvas.height = window.innerHeight);
 
     let beamGradients: CanvasGradient[] = [];
+    let laserGrad: CanvasGradient;
+
     const updateGradients = () => {
       const cx = width / 2;
       const cy = height * 0.45;
@@ -144,6 +168,14 @@ export const CyberBootIntro: React.FC<CyberBootIntroProps> = ({ onComplete }) =>
       g2.addColorStop(1, 'rgba(0, 0, 0, 0)');
 
       beamGradients = [g0, g1, g2];
+
+      // Pre-create horizontal laser gradient once per resize to eliminate per-frame allocations
+      laserGrad = ctx.createLinearGradient(0, 0, width, 0);
+      laserGrad.addColorStop(0, 'rgba(0, 242, 254, 0)');
+      laserGrad.addColorStop(0.3, 'rgba(255, 153, 51, 0.8)');
+      laserGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.95)');
+      laserGrad.addColorStop(0.7, 'rgba(19, 136, 8, 0.8)');
+      laserGrad.addColorStop(1, 'rgba(0, 242, 254, 0)');
     };
     updateGradients();
 
@@ -203,7 +235,7 @@ export const CyberBootIntro: React.FC<CyberBootIntroProps> = ({ onComplete }) =>
         ctx.strokeStyle = wave === 0 ? 'rgba(255, 153, 51, 0.26)' : wave === 1 ? 'rgba(255, 255, 255, 0.2)' : 'rgba(19, 136, 8, 0.26)';
         ctx.lineWidth = 3;
 
-        for (let x = 0; x <= width; x += 12) {
+        for (let x = 0; x <= width; x += 18) {
           const y = waveY + Math.sin(x * 0.0035 + t + wave) * 32 + Math.cos(x * 0.007 + t * 1.5) * 16;
           if (x === 0) ctx.moveTo(x, y);
           else ctx.lineTo(x, y);
@@ -231,12 +263,6 @@ export const CyberBootIntro: React.FC<CyberBootIntroProps> = ({ onComplete }) =>
 
       // 4. Horizontal Optical Laser Scanner Beam
       const scanY = (height * 0.5) + Math.sin(t * 2.5) * (height * 0.38);
-      const laserGrad = ctx.createLinearGradient(0, scanY, width, scanY);
-      laserGrad.addColorStop(0, 'rgba(0, 242, 254, 0)');
-      laserGrad.addColorStop(0.3, 'rgba(255, 153, 51, 0.8)');
-      laserGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.95)');
-      laserGrad.addColorStop(0.7, 'rgba(19, 136, 8, 0.8)');
-      laserGrad.addColorStop(1, 'rgba(0, 242, 254, 0)');
       ctx.fillStyle = laserGrad;
       ctx.fillRect(0, scanY - 1.5, width, 3);
 
@@ -283,13 +309,15 @@ export const CyberBootIntro: React.FC<CyberBootIntroProps> = ({ onComplete }) =>
               transform: isCurrent ? 'scale(1.04)' : 'scale(1.0)',
               transition: 'opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.75s ease-out',
               zIndex: isCurrent ? 2 : 1,
-              pointerEvents: 'none'
+              pointerEvents: 'none',
+              willChange: 'opacity, transform'
             }}
           >
             <img
               src={scene.image}
               alt=""
               loading="eager"
+              decoding="async"
               style={{
                 width: '100%',
                 height: '100%',
@@ -496,7 +524,7 @@ export const CyberBootIntro: React.FC<CyberBootIntroProps> = ({ onComplete }) =>
             width: `${progress}%`,
             borderRadius: 99,
             background: 'linear-gradient(90deg, #ff9933 0%, #ffffff 50%, #138808 100%)',
-            transition: 'width 0.08s ease'
+            transition: 'width 0.12s linear'
           }} />
         </div>
 

@@ -211,9 +211,19 @@ export const App: React.FC = () => {
     setAuditLogs((prev) => [auditEntry, ...prev]);
   };
 
-  // Initial load
+  // Initial load: defer heavy forensics analysis & biometric hashing so boot intro animation runs smoothly at 60 FPS
   useEffect(() => {
-    processPreset(SAMPLE_DOCUMENTS[0]);
+    const runDeferredPreset = () => {
+      processPreset(SAMPLE_DOCUMENTS[0]);
+    };
+
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      const handle = (window as any).requestIdleCallback(runDeferredPreset, { timeout: 3500 });
+      return () => (window as any).cancelIdleCallback(handle);
+    } else {
+      const timer = setTimeout(runDeferredPreset, 1200);
+      return () => clearTimeout(timer);
+    }
   }, []);
 
   // Handle custom upload with REAL Tesseract.js OCR and genuine pixel comparison
