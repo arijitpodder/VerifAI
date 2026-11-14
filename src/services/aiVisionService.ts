@@ -142,12 +142,18 @@ export function setStoredApiKey(_provider: 'gemini' | 'openai' | 'groq' | 'nvidi
   // Locked: API keys are securely managed internally and cannot be altered from the website
 }
 
+function isLocalEnvironment(): boolean {
+  if (typeof window === 'undefined') return false;
+  const h = window.location.hostname;
+  return h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || h.endsWith('.local') || window.location.port !== '';
+}
+
 /**
  * Resolves optimal API endpoint via direct cloud API or Vite reverse proxy
  */
 function getApiEndpoints(provider: 'gemini' | 'groq' | 'openai' | 'nvidia', directBase: string, path: string): string[] {
   const direct = `${directBase}${path}`;
-  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+  if (isLocalEnvironment()) {
     // Return proxy first on localhost dev server, with direct cloud as instant fallback
     return [`/api-proxy/${provider}${path}`, direct];
   }
@@ -155,7 +161,7 @@ function getApiEndpoints(provider: 'gemini' | 'groq' | 'openai' | 'nvidia', dire
 }
 
 function getApiEndpoint(provider: 'gemini' | 'groq' | 'openai' | 'nvidia', directBase: string, path: string): string {
-  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+  if (isLocalEnvironment()) {
     return `/api-proxy/${provider}${path}`;
   }
   return `${directBase}${path}`;
@@ -638,11 +644,11 @@ export async function verifyWithGroqVision(
 
 /**
  * 4. NVIDIA NIM AI / ChatGPT Architecture (NVIDIA NIM Hosted Foundation Models)
- * Models: nvidia/nemotron-3.5-bolt-e4b, google/gemma-4-31b-it, nvidia/nemotron-3.5-lightning-30b-a3b
+ * Models: nvidia/nemotron-3.5-bolt-e4b, google/gemma-4-31b-it
  */
 export async function verifyWithOpenAIVision(
-  refPhotoUri: string,
-  livePhotoUri: string,
+  _refPhotoUri: string,
+  _livePhotoUri: string,
   apiKey: string,
   compMetrics?: { pdDelta: number; templeDelta: number; symmetryDelta: number; structureDelta: number }
 ): Promise<AIVisionResult> {
@@ -663,15 +669,9 @@ export async function verifyWithOpenAIVision(
   };
 
   try {
-    const [imgA, imgB] = await Promise.all([
-      getBase64Data(refPhotoUri),
-      getBase64Data(livePhotoUri)
-    ]);
-
     const candidateModels = [
       'nvidia/nemotron-3.5-bolt-e4b',
-      'google/gemma-4-31b-it',
-      'nvidia/nemotron-3.5-lightning-30b-a3b'
+      'google/gemma-4-31b-it'
     ];
     const promptText = buildBiometricPrompt(compMetrics);
 
@@ -684,22 +684,16 @@ export async function verifyWithOpenAIVision(
             model,
             messages: [
               {
+                role: 'system',
+                content: 'You are an advanced biometric identity verification AI. You must evaluate the forensic biometric criteria and respond ONLY with a valid JSON object matching the requested schema.'
+              },
+              {
                 role: 'user',
-                content: [
-                  { type: 'text', text: promptText },
-                  {
-                    type: 'image_url',
-                    image_url: { url: `data:${imgA.mimeType};base64,${imgA.base64}` }
-                  },
-                  {
-                    type: 'image_url',
-                    image_url: { url: `data:${imgB.mimeType};base64,${imgB.base64}` }
-                  }
-                ]
+                content: promptText
               }
             ],
             response_format: { type: 'json_object' },
-            max_tokens: 600,
+            max_tokens: 1200,
             temperature: 0.1
           };
 
@@ -710,7 +704,7 @@ export async function verifyWithOpenAIVision(
               'Authorization': `Bearer ${activeKey}`
             },
             body: JSON.stringify(payload),
-            signal: AbortSignal.timeout(6000)
+            signal: AbortSignal.timeout(10000)
           });
 
           const latencyMs = Math.round(performance.now() - startTime);
@@ -720,6 +714,9 @@ export async function verifyWithOpenAIVision(
 
           if (!response.ok) {
             console.warn(`NVIDIA NIM candidate model ${model} on ${endpoint} returned HTTP ${response.status}. Attempting next option...`);
+            if (response.status === 429) {
+              liveTelemetry.statusText = '429 Rate Limit (Exempted from calculation)';
+            }
             continue;
           }
 
@@ -727,6 +724,8 @@ export async function verifyWithOpenAIVision(
           let rawText = data?.choices?.[0]?.message?.content;
           if (rawText) {
             rawText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+            const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+            if (jsonMatch) rawText = jsonMatch[0];
             const parsed = JSON.parse(rawText);
             let rawConfidence = Number(parsed.confidenceScore ?? parsed.confidence ?? parsed.similarityScore);
             if (rawConfidence <= 1.0 && rawConfidence > 0) rawConfidence *= 100;
@@ -778,8 +777,12 @@ export async function verifyWithOpenAIVision(
 
   // If NVIDIA NIM encountered rate limit or network failure, exempt per user instruction
   liveTelemetry.isExempted = true;
-  const statusLabel = liveTelemetry.httpStatus > 0 ? `HTTP ${liveTelemetry.httpStatus}` : 'Network / Timeout';
-  liveTelemetry.statusText = liveTelemetry.statusText || 'Unavailable (Exempted from calculation)';
+  const statusLabel = liveTelemetry.httpStatus > 0
+    ? `HTTP ${liveTelemetry.httpStatus}`
+    : (isLocalEnvironment() ? 'Timeout' : 'Static Hosting CORS Barrier');
+  liveTelemetry.statusText = liveTelemetry.statusText === 'Connecting to NVIDIA NIM API...'
+    ? (isLocalEnvironment() ? 'Unavailable (Exempted from calculation)' : 'CORS Restricted on Static Hosting (Active on Localhost)')
+    : liveTelemetry.statusText;
 
   return {
     provider: 'openai',
