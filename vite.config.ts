@@ -4,7 +4,7 @@ import { defineConfig } from 'vite'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: process.env.NODE_ENV === 'production' ? '/VerifAI/' : '/',
+  base: process.env.BASE_URL || (process.env.NODE_ENV === 'production' ? '/VerifAI/' : '/'),
   build: {
     rollupOptions: {
       output: {
