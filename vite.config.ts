@@ -16,25 +16,51 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api-proxy/gemini': {
+      '^.*/api-proxy/gemini': {
         target: 'https://generativelanguage.googleapis.com',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api-proxy\/gemini/, '')
+        secure: false,
+        rewrite: (path) => path.replace(/^.*\/api-proxy\/gemini/, '')
       },
-      '/api-proxy/groq': {
+      '^.*/api-proxy/groq': {
         target: 'https://api.groq.com',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api-proxy\/groq/, '')
+        secure: false,
+        rewrite: (path) => path.replace(/^.*\/api-proxy\/groq/, '')
       },
-      '/api-proxy/nvidia': {
+      '^.*/api-proxy/nvidia': {
         target: 'https://integrate.api.nvidia.com',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api-proxy\/nvidia/, '')
+        secure: false,
+        rewrite: (path) => path.replace(/^.*\/api-proxy\/nvidia/, '')
       },
-      '/api-proxy/openai': {
+      '^.*/api-proxy/openai': {
         target: 'https://api.openai.com',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api-proxy\/openai/, '')
+        secure: false,
+        rewrite: (path) => path.replace(/^.*\/api-proxy\/openai/, '')
+      }
+    }
+  },
+  preview: {
+    proxy: {
+      '^.*/api-proxy/nvidia': {
+        target: 'https://integrate.api.nvidia.com',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^.*\/api-proxy\/nvidia/, '')
+      },
+      '^.*/api-proxy/gemini': {
+        target: 'https://generativelanguage.googleapis.com',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^.*\/api-proxy\/gemini/, '')
+      },
+      '^.*/api-proxy/groq': {
+        target: 'https://api.groq.com',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^.*\/api-proxy\/groq/, '')
       }
     }
   }

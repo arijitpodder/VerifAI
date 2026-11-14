@@ -99,7 +99,7 @@ export const DEFAULT_GEMINI_KEY =
 
 export const DEFAULT_NVIDIA_KEY =
   (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_NVIDIA_API_KEY || import.meta.env?.VITE_OPENAI_API_KEY)) ||
-  decodeFallbackKey('bjFEakpmTVRBQWhtdkNkRXZ3dWNOc0lfV0YwSFd5TXRjVjdhQXVqUzBvV3RSSDRZZVE0cFplSE43VjYzQVlsci1pcGF2bg==');
+  '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';
 
 export const DEFAULT_OPENAI_KEY = DEFAULT_NVIDIA_KEY;
 
@@ -154,8 +154,8 @@ function isLocalEnvironment(): boolean {
 function getApiEndpoints(provider: 'gemini' | 'groq' | 'openai' | 'nvidia', directBase: string, path: string): string[] {
   const direct = `${directBase}${path}`;
   if (isLocalEnvironment()) {
-    // Return proxy first on localhost dev server, with direct cloud as instant fallback
-    return [`/api-proxy/${provider}${path}`, direct];
+    // On localhost, strictly use Vite reverse proxy to ensure zero CORS interference
+    return [`/api-proxy/${provider}${path}`];
   }
   return [direct];
 }
@@ -704,7 +704,7 @@ export async function verifyWithOpenAIVision(
               'Authorization': `Bearer ${activeKey}`
             },
             body: JSON.stringify(payload),
-            signal: AbortSignal.timeout(10000)
+            signal: AbortSignal.timeout(15000)
           });
 
           const latencyMs = Math.round(performance.now() - startTime);
