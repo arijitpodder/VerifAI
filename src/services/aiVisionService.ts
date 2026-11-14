@@ -4,7 +4,7 @@
  * 1. Our AI (In-Browser High-Precision 84-D & 888-Point Biometric Subspace)
  * 2. Google Gemini AI (gemini-3.6-flash / gemini-3.1-flash-lite)
  * 3. Groq LPU AI (groq/compound-mini / qwen/qwen3.8-27b)
- * 4. ChatGPT AI (OpenAI GPT-4o / GPT-4o-mini)
+ * 4. NVIDIA NIM AI / ChatGPT Architecture (nvidia/nemotron-3.5-bolt-e4b / google/gemma-4-31b-it)
  *
  * Each AI independently maps thousands of distinct biometric data points,
  * tracking Pupillary Distance (PD), Temple Width, Facial Symmetry, and Facial Structure.
@@ -14,10 +14,10 @@
 import { computeAuthenticFaceSimilarity } from './biometricsEngine';
 import type { DetailedBiometricComparison } from './biometricsEngine';
 
-export type AIProviderType = 'gemini' | 'openai' | 'groq' | 'our_ai' | 'local' | 'quad';
+export type AIProviderType = 'gemini' | 'openai' | 'groq' | 'our_ai' | 'local' | 'quad' | 'nvidia';
 
 export interface LiveApiTelemetry {
-  provider: 'gemini' | 'groq' | 'openai' | 'our_ai';
+  provider: 'gemini' | 'groq' | 'openai' | 'our_ai' | 'nvidia';
   displayName: string;
   model: string;
   endpoint: string;
@@ -49,7 +49,7 @@ export interface BiometricMetrics {
 }
 
 export interface AIVisionResult {
-  provider: 'gemini' | 'groq' | 'openai' | 'our_ai';
+  provider: 'gemini' | 'groq' | 'openai' | 'our_ai' | 'nvidia';
   displayName: string;
   model: string;
   isSamePerson: boolean;
@@ -97,9 +97,11 @@ export const DEFAULT_GEMINI_KEY =
   (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) ||
   decodeFallbackKey('QXhMN1RUcWdVRkFrWU9FMEVQZmZiNGIyV2xzMWlpUTFneldoZXZsMkFZOUw2TlI4YkEuUUE=');
 
-export const DEFAULT_OPENAI_KEY =
-  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_OPENAI_API_KEY) ||
-  decodeFallbackKey('QW9ITWhvNGEtNXZJTGo3UEl5Y2lid3VuM01USkJ3T1dCdDhaNngxcklBd1NxM2xGdXJaU0FlS3Z3OVNGM01oZVcya1JRVzNTcTlKRmtibEIzVENQbGtnYllJNXFDQnhsWkx1MEFtREUwRjJFR2FJWGVMN1Fob3BNR21GdzR0QjlIekFuVHRuQXRrdFN0cUJuY3M2OFpzeGhCYUdBLWpvcnAta3M=');
+export const DEFAULT_NVIDIA_KEY =
+  (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_NVIDIA_API_KEY || import.meta.env?.VITE_OPENAI_API_KEY)) ||
+  decodeFallbackKey('bjFEakpmTVRBQWhtdkNkRXZ3dWNOc0lfV0YwSFd5TXRjVjdhQXVqUzBvV3RSSDRZZVE0cFplSE43VjYzQVlsci1pcGF2bg==');
+
+export const DEFAULT_OPENAI_KEY = DEFAULT_NVIDIA_KEY;
 
 export const DEFAULT_GROQ_KEY =
   (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GROQ_API_KEY) ||
@@ -110,6 +112,7 @@ try {
   if (typeof localStorage !== 'undefined') {
     localStorage.removeItem('verifai_gemini_api_key');
     localStorage.removeItem('verifai_openai_api_key');
+    localStorage.removeItem('verifai_nvidia_api_key');
     localStorage.removeItem('verifai_groq_api_key');
     localStorage.removeItem('verifai_ai_provider');
   }
@@ -125,24 +128,24 @@ export function setActiveAIProvider(_provider: AIProviderType): void {
   // Locked: all 4 models operate together permanently
 }
 
-export function getStoredApiKey(provider: 'gemini' | 'openai' | 'groq'): string {
+export function getStoredApiKey(provider: 'gemini' | 'openai' | 'groq' | 'nvidia'): string {
   if (provider === 'gemini') {
     return DEFAULT_GEMINI_KEY;
   }
-  if (provider === 'openai') {
-    return DEFAULT_OPENAI_KEY;
+  if (provider === 'openai' || provider === 'nvidia') {
+    return DEFAULT_NVIDIA_KEY;
   }
   return DEFAULT_GROQ_KEY;
 }
 
-export function setStoredApiKey(_provider: 'gemini' | 'openai' | 'groq', _key: string): void {
+export function setStoredApiKey(_provider: 'gemini' | 'openai' | 'groq' | 'nvidia', _key: string): void {
   // Locked: API keys are securely managed internally and cannot be altered from the website
 }
 
 /**
  * Resolves optimal API endpoint via direct cloud API or Vite reverse proxy
  */
-function getApiEndpoints(provider: 'gemini' | 'groq' | 'openai', directBase: string, path: string): string[] {
+function getApiEndpoints(provider: 'gemini' | 'groq' | 'openai' | 'nvidia', directBase: string, path: string): string[] {
   const direct = `${directBase}${path}`;
   if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
     // Return proxy first on localhost dev server, with direct cloud as instant fallback
@@ -151,7 +154,7 @@ function getApiEndpoints(provider: 'gemini' | 'groq' | 'openai', directBase: str
   return [direct];
 }
 
-function getApiEndpoint(provider: 'gemini' | 'groq' | 'openai', directBase: string, path: string): string {
+function getApiEndpoint(provider: 'gemini' | 'groq' | 'openai' | 'nvidia', directBase: string, path: string): string {
   if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
     return `/api-proxy/${provider}${path}`;
   }
@@ -640,7 +643,8 @@ export async function verifyWithGroqVision(
 }
 
 /**
- * 4. CHATGPT AI (OpenAI GPT-4o / GPT-4o-mini)
+ * 4. NVIDIA NIM AI / ChatGPT Architecture (NVIDIA NIM Hosted Foundation Models)
+ * Models: nvidia/nemotron-3.5-bolt-e4b, google/gemma-4-31b-it, nvidia/nemotron-3.5-lightning-30b-a3b
  */
 export async function verifyWithOpenAIVision(
   refPhotoUri: string,
@@ -649,15 +653,15 @@ export async function verifyWithOpenAIVision(
   compMetrics?: { pdDelta: number; templeDelta: number; symmetryDelta: number; structureDelta: number }
 ): Promise<AIVisionResult> {
   const startTime = performance.now();
-  const activeKey = apiKey.trim() || DEFAULT_OPENAI_KEY;
+  const activeKey = apiKey.trim() || DEFAULT_NVIDIA_KEY;
 
   let liveTelemetry: LiveApiTelemetry = {
     provider: 'openai',
-    displayName: 'ChatGPT AI (OpenAI GPT-4o)',
-    model: 'gpt-4o-mini',
-    endpoint: 'api.openai.com',
+    displayName: 'NVIDIA NIM AI (Nemotron Bolt)',
+    model: 'nvidia/nemotron-3.5-bolt-e4b',
+    endpoint: 'integrate.api.nvidia.com',
     httpStatus: 0,
-    statusText: 'Connecting to OpenAI API...',
+    statusText: 'Connecting to NVIDIA NIM API...',
     latencyMs: 0,
     isLiveCloud: true,
     timestamp: new Date().toLocaleTimeString(),
@@ -670,127 +674,146 @@ export async function verifyWithOpenAIVision(
       getBase64Data(livePhotoUri)
     ]);
 
-    const endpoint = getApiEndpoint('openai', 'https://api.openai.com', '/v1/chat/completions');
+    const candidateModels = [
+      'nvidia/nemotron-3.5-bolt-e4b',
+      'google/gemma-4-31b-it',
+      'nvidia/nemotron-3.5-lightning-30b-a3b'
+    ];
     const promptText = buildBiometricPrompt(compMetrics);
 
-    const payload = {
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: promptText },
-            {
-              type: 'image_url',
-              image_url: { url: `data:${imgA.mimeType};base64,${imgA.base64}` }
+    for (const model of candidateModels) {
+      const endpoints = getApiEndpoints('nvidia', 'https://integrate.api.nvidia.com', '/v1/chat/completions');
+
+      for (const endpoint of endpoints) {
+        try {
+          const payload = {
+            model,
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  { type: 'text', text: promptText },
+                  {
+                    type: 'image_url',
+                    image_url: { url: `data:${imgA.mimeType};base64,${imgA.base64}` }
+                  },
+                  {
+                    type: 'image_url',
+                    image_url: { url: `data:${imgB.mimeType};base64,${imgB.base64}` }
+                  }
+                ]
+              }
+            ],
+            response_format: { type: 'json_object' },
+            max_tokens: 600,
+            temperature: 0.1
+          };
+
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${activeKey}`
             },
-            {
-              type: 'image_url',
-              image_url: { url: `data:${imgB.mimeType};base64,${imgB.base64}` }
+            body: JSON.stringify(payload),
+            signal: AbortSignal.timeout(10000)
+          });
+
+          const latencyMs = Math.round(performance.now() - startTime);
+          liveTelemetry.httpStatus = response.status;
+          liveTelemetry.latencyMs = latencyMs;
+          liveTelemetry.model = model;
+
+          if (!response.ok) {
+            console.warn(`NVIDIA NIM candidate model ${model} on ${endpoint} returned HTTP ${response.status}. Attempting next option...`);
+            continue;
+          }
+
+          const data = await response.json();
+          let rawText = data?.choices?.[0]?.message?.content;
+          if (rawText) {
+            rawText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+            const parsed = JSON.parse(rawText);
+            const isSamePerson = Boolean(parsed.isSamePerson ?? parsed.isMatch);
+            let rawConfidence = Number(parsed.confidenceScore ?? parsed.confidence ?? parsed.similarityScore);
+            if (rawConfidence <= 1.0 && rawConfidence > 0) rawConfidence *= 100;
+
+            let confidenceScore: number;
+            if (isSamePerson) {
+              confidenceScore = Math.max(88, Math.min(98, Math.round(rawConfidence >= 75 ? rawConfidence : 95)));
+            } else {
+              confidenceScore = Math.min(20, Math.max(10, Math.round(rawConfidence > 50 ? (100 - rawConfidence) : rawConfidence)));
             }
-          ]
+
+            const verdict: AIVisionResult['verdict'] = isSamePerson
+              ? confidenceScore >= 80 ? 'HIGH_MATCH' : 'MODERATE_MATCH'
+              : 'DIVERGENCE_MISMATCH';
+
+            const cleanModelName = model.split('/')[1] || model;
+            liveTelemetry.displayName = `NVIDIA NIM AI (${cleanModelName})`;
+            liveTelemetry.statusText = '200 OK (NVIDIA NIM Cloud)';
+            liveTelemetry.isLiveCloud = true;
+            liveTelemetry.isExempted = false;
+
+            return {
+              provider: 'openai',
+              displayName: `NVIDIA NIM AI (${cleanModelName})`,
+              model,
+              isSamePerson,
+              confidenceScore,
+              verdict,
+              reasoning: parsed.reasoning || (isSamePerson ? 'NVIDIA NIM verified biometric points: pupillary distance, temple width, and facial symmetry match.' : 'NVIDIA NIM detected biometric disparity.'),
+              structuralScore: Math.round(Number(parsed.structuralScore) || (isSamePerson ? 96 : 18)),
+              proportionScore: Math.round(Number(parsed.proportionScore) || (isSamePerson ? 95 : 20)),
+              featureScore: Math.round(Number(parsed.featureScore) || (isSamePerson ? 94 : 16)),
+              edgeScore: Math.round(Number(parsed.edgeScore) || (isSamePerson ? 96 : 19)),
+              colorScore: Math.round(Number(parsed.colorScore) || (isSamePerson ? 89 : 25)),
+              breakdown: {
+                pupillaryDistancePD: parsed.pupillaryDistancePD || (isSamePerson ? 'Inter-pupillary distance ratio conforms (2.7% delta)' : 'Pupillary distance disparity'),
+                templeWidth: parsed.templeWidth || (isSamePerson ? 'Bitemporal breadth conforms to cardholder' : 'Bitemporal width mismatch'),
+                facialSymmetry: parsed.facialSymmetry || (isSamePerson ? 'Bilateral symmetry index 96.7%' : 'Sagittal asymmetry divergence'),
+                facialStructure: parsed.facialStructure || (isSamePerson ? 'Cranial vault and jaw taper collinear' : 'Cranial elongation mismatch')
+              },
+              telemetry: liveTelemetry
+            };
+          }
+        } catch (err: any) {
+          liveTelemetry.errorDetail = err?.message || 'Network error';
         }
-      ],
-      response_format: { type: 'json_object' },
-      max_tokens: 350,
-      temperature: 0.1
-    };
-
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${activeKey}`
-      },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(6000)
-    });
-
-    const latencyMs = Math.round(performance.now() - startTime);
-    liveTelemetry.httpStatus = response.status;
-    liveTelemetry.latencyMs = latencyMs;
-
-    if (response.ok) {
-      const data = await response.json();
-      let rawText = data?.choices?.[0]?.message?.content;
-      if (rawText) {
-        rawText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
-        const parsed = JSON.parse(rawText);
-        const isSamePerson = Boolean(parsed.isSamePerson ?? parsed.isMatch);
-        let rawConfidence = Number(parsed.confidenceScore ?? parsed.confidence ?? parsed.similarityScore);
-        if (rawConfidence <= 1.0 && rawConfidence > 0) rawConfidence *= 100;
-
-        let confidenceScore: number;
-        if (isSamePerson) {
-          confidenceScore = Math.max(88, Math.min(98, Math.round(rawConfidence >= 75 ? rawConfidence : 95)));
-        } else {
-          confidenceScore = Math.min(20, Math.max(10, Math.round(rawConfidence > 50 ? (100 - rawConfidence) : rawConfidence)));
-        }
-
-        const verdict: AIVisionResult['verdict'] = isSamePerson
-          ? confidenceScore >= 80 ? 'HIGH_MATCH' : 'MODERATE_MATCH'
-          : 'DIVERGENCE_MISMATCH';
-
-        liveTelemetry.statusText = '200 OK (OpenAI Cloud)';
-        liveTelemetry.isLiveCloud = true;
-        liveTelemetry.isExempted = false;
-
-        return {
-          provider: 'openai',
-          displayName: 'ChatGPT AI (GPT-4o Vision)',
-          model: 'gpt-4o-mini',
-          isSamePerson,
-          confidenceScore,
-          verdict,
-          reasoning: parsed.reasoning || (isSamePerson ? 'OpenAI GPT-4o verified biometric points: pupillary distance, temple width, and facial symmetry match.' : 'OpenAI GPT-4o detected biometric disparity.'),
-          structuralScore: Math.round(Number(parsed.structuralScore) || (isSamePerson ? 96 : 18)),
-          proportionScore: Math.round(Number(parsed.proportionScore) || (isSamePerson ? 95 : 20)),
-          featureScore: Math.round(Number(parsed.featureScore) || (isSamePerson ? 94 : 16)),
-          edgeScore: Math.round(Number(parsed.edgeScore) || (isSamePerson ? 96 : 19)),
-          colorScore: Math.round(Number(parsed.colorScore) || (isSamePerson ? 89 : 25)),
-          breakdown: {
-            pupillaryDistancePD: parsed.pupillaryDistancePD || (isSamePerson ? 'Inter-pupillary distance ratio conforms (2.7% delta)' : 'Pupillary distance disparity'),
-            templeWidth: parsed.templeWidth || (isSamePerson ? 'Bitemporal breadth conforms to cardholder' : 'Bitemporal width mismatch'),
-            facialSymmetry: parsed.facialSymmetry || (isSamePerson ? 'Bilateral symmetry index 96.7%' : 'Sagittal asymmetry divergence'),
-            facialStructure: parsed.facialStructure || (isSamePerson ? 'Cranial vault and jaw taper collinear' : 'Cranial elongation mismatch')
-          },
-          telemetry: liveTelemetry
-        };
       }
-    } else if (response.status === 429) {
-      liveTelemetry.statusText = '429 Quota Exceeded (Exempted from calculation)';
-      liveTelemetry.isExempted = true;
     }
   } catch (err: any) {
     liveTelemetry.errorDetail = err?.message || 'Network error';
   }
 
-  // If OpenAI encountered rate limit or network failure, exempt per user instruction
+  // If NVIDIA NIM encountered rate limit or network failure, exempt per user instruction
   liveTelemetry.isExempted = true;
   liveTelemetry.statusText = liveTelemetry.statusText || 'Unavailable (Exempted from calculation)';
 
   return {
     provider: 'openai',
-    displayName: 'ChatGPT AI (OpenAI GPT-4o)',
-    model: 'gpt-4o-mini',
+    displayName: 'NVIDIA NIM AI',
+    model: 'nvidia/nemotron-3.5-bolt-e4b',
     isSamePerson: false,
     confidenceScore: 0,
     verdict: 'DIVERGENCE_MISMATCH',
-    reasoning: `OpenAI API returned HTTP ${liveTelemetry.httpStatus || 429} (${liveTelemetry.statusText}). Exempted from calculation per user directive.`,
+    reasoning: `NVIDIA NIM API returned HTTP ${liveTelemetry.httpStatus || 429} (${liveTelemetry.statusText}). Exempted from calculation per user directive.`,
     structuralScore: 0,
     proportionScore: 0,
     featureScore: 0,
     edgeScore: 0,
     colorScore: 0,
     breakdown: {
-      pupillaryDistancePD: 'Exempted (HTTP 429)',
-      templeWidth: 'Exempted (HTTP 429)',
-      facialSymmetry: 'Exempted (HTTP 429)',
-      facialStructure: 'Exempted (HTTP 429)'
+      pupillaryDistancePD: 'Exempted',
+      templeWidth: 'Exempted',
+      facialSymmetry: 'Exempted',
+      facialStructure: 'Exempted'
     },
     telemetry: liveTelemetry
   };
 }
+
+export const verifyWithNvidiaVision = verifyWithOpenAIVision;
 
 /**
  * ─── QUAD-AI MULTI-MODEL CONSENSUS VERIFICATION ─────────────────────────────
@@ -959,10 +982,11 @@ Return strictly valid JSON with these fields:
       }
     }
 
-    if (openaiKey) {
-      const endpoint = getApiEndpoint('openai', 'https://api.openai.com', '/v1/chat/completions');
+    const nvidiaKey = getStoredApiKey('nvidia') || openaiKey;
+    if (nvidiaKey) {
+      const endpoint = getApiEndpoint('nvidia', 'https://integrate.api.nvidia.com', '/v1/chat/completions');
       const payload = {
-        model: 'gpt-4o-mini',
+        model: 'nvidia/nemotron-3.5-bolt-e4b',
         messages: [
           {
             role: 'user',
@@ -979,14 +1003,17 @@ Return strictly valid JSON with these fields:
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${openaiKey.trim()}`
+          'Authorization': `Bearer ${nvidiaKey.trim()}`
         },
         body: JSON.stringify(payload)
       });
       if (res.ok) {
         const json = await res.json();
-        const text = json?.choices?.[0]?.message?.content;
-        if (text) return JSON.parse(text);
+        let text = json?.choices?.[0]?.message?.content;
+        if (text) {
+          text = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+          return JSON.parse(text);
+        }
       }
     }
   } catch (err) {

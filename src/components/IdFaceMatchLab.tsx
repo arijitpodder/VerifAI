@@ -838,7 +838,7 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
                 gap: '0.5rem',
                 boxShadow: '0 0 15px rgba(0, 242, 254, 0.15)'
               }}
-              title="Quad-Core AI Ensemble: In-House AI + Gemini + Groq + ChatGPT working together concurrently"
+              title="Quad-Core AI Ensemble: In-House AI + Gemini + Groq + NVIDIA NIM working together concurrently"
             >
               <Bot size={16} color="var(--cyan-primary)" />
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>

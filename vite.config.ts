@@ -26,6 +26,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api-proxy\/groq/, '')
       },
+      '/api-proxy/nvidia': {
+        target: 'https://integrate.api.nvidia.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api-proxy\/nvidia/, '')
+      },
       '/api-proxy/openai': {
         target: 'https://api.openai.com',
         changeOrigin: true,
