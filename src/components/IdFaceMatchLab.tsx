@@ -691,17 +691,19 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
       facePassed = comp.matchPassed && comp.similarityScore >= 65;
     }
 
+    // Reveal results immediately after all APIs respond
+    setIsAnalyzing(false);
     setVerificationPassed(facePassed);
 
     // Generate cryptographic audit hash
     const fakeHash = '0x' + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
     setAuditHash(fakeHash);
 
-    // Animated score counting up from 0 to actual score
+    // Fast, snappy animated score counting up from 0 to actual score (250ms)
     setAnimatedScore(0);
 
-    const stepTime = 28;
-    const totalSteps = 28;
+    const stepTime = 18;
+    const totalSteps = 14;
     let currentStepNum = 0;
 
     const countInterval = setInterval(() => {
@@ -711,13 +713,12 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
       if (currentStepNum >= totalSteps) {
         clearInterval(countInterval);
         setAnimatedScore(targetScore);
-        setIsAnalyzing(false);
 
         if (facePassed) {
           soundEffects.playSuccessFanfare();
           setTimeout(() => {
             soundEffects.playNatureChime();
-          }, 350);
+          }, 200);
           window.dispatchEvent(new CustomEvent('higgsfield-pulse', { detail: { color: '#10b981' } }));
           try {
             confetti({
@@ -1859,8 +1860,199 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
       {/* STEP 3: 1:1 IDENTITY VERIFICATION RESULT */}
       {currentStep === 'STEP3_RESULT' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          {/* Big Verified Status Card with Laser Beam & Confetti */}
-          <div className="glass-panel" style={{
+          {isAnalyzing ? (
+            /* ── DEDICATED LOADING PAGE WHILE ALL APIS RESPOND ── */
+            <div
+              className="glass-panel"
+              style={{
+                padding: '3.5rem 2rem',
+                textAlign: 'center',
+                border: '2px solid rgba(0, 242, 254, 0.45)',
+                boxShadow: '0 0 50px rgba(0, 242, 254, 0.22)',
+                position: 'relative',
+                overflow: 'hidden',
+                borderRadius: 'var(--radius-xl)',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '1.6rem'
+              }}
+            >
+              {/* Ambient Cybernetic Scanning Laser */}
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  background: 'linear-gradient(180deg, transparent, rgba(0, 242, 254, 0.12), transparent)',
+                  animation: 'laserSweep 0.8s infinite'
+                }}
+              />
+
+              {/* Central Rotating Robotic HUD Loader */}
+              <div style={{ position: 'relative', width: '120px', height: '120px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div
+                  className="reticle-spin-cw"
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    borderRadius: '50%',
+                    border: '2px dashed rgba(0, 242, 254, 0.7)',
+                    boxShadow: '0 0 30px rgba(0, 242, 254, 0.3)'
+                  }}
+                />
+                <div
+                  className="reticle-spin-ccw"
+                  style={{
+                    position: 'absolute',
+                    inset: '12px',
+                    borderRadius: '50%',
+                    border: '2.5px solid transparent',
+                    borderTopColor: '#00f2fe',
+                    borderBottomColor: '#10b981'
+                  }}
+                />
+                <div
+                  style={{
+                    width: '56px',
+                    height: '56px',
+                    borderRadius: '50%',
+                    background: 'rgba(0, 242, 254, 0.16)',
+                    border: '1.5px solid #00f2fe',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 0 24px #00f2fe'
+                  }}
+                >
+                  <Sparkles size={28} color="#00f2fe" />
+                </div>
+              </div>
+
+              {/* Loading Header & Description */}
+              <div>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.6rem' }}>
+                  <span className="badge badge-cyan" style={{ fontSize: '0.74rem', padding: '0.25rem 0.85rem' }}>
+                    ⚡ Interrogating Quad-AI Ensemble
+                  </span>
+                  <span className="badge badge-green" style={{ fontSize: '0.74rem', padding: '0.25rem 0.85rem' }}>
+                    4 Models In-Flight
+                  </span>
+                </div>
+                <h2 style={{
+                  fontSize: '1.85rem',
+                  fontWeight: 900,
+                  letterSpacing: '-0.02em',
+                  color: '#ffffff',
+                  margin: '0.25rem 0 0.5rem 0'
+                }}>
+                  Awaiting Multi-Model AI Consensus...
+                </h2>
+                <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', maxWidth: '640px', margin: '0 auto', lineHeight: 1.5 }}>
+                  Executing simultaneous multimodal biometric analysis across Google Gemini, Groq LPU, NVIDIA NIM, and In-House 888-Point Landmark Subspace. Results will render instantly upon consensus.
+                </p>
+              </div>
+
+              {/* Holographic Fast Progress Bar */}
+              <div style={{ width: '100%', maxWidth: '560px' }}>
+                <div style={{
+                  height: '8px',
+                  borderRadius: '99px',
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  overflow: 'hidden',
+                  position: 'relative',
+                  border: '1px solid rgba(0, 242, 254, 0.3)'
+                }}>
+                  <div style={{
+                    width: '100%',
+                    height: '100%',
+                    background: 'linear-gradient(90deg, #00f2fe 0%, #10b981 50%, #38bdf8 100%)',
+                    animation: 'holographicShimmer 1.2s linear infinite',
+                    backgroundSize: '200% 100%'
+                  }} />
+                </div>
+              </div>
+
+              {/* 4 Models Telemetry Tracker Cards */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+                gap: '0.75rem',
+                width: '100%',
+                maxWidth: '920px'
+              }}>
+                <div style={{
+                  background: 'rgba(6, 12, 24, 0.85)',
+                  border: '1px solid rgba(0, 242, 254, 0.3)',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '0.85rem',
+                  textAlign: 'left'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                    <strong style={{ fontSize: '0.8rem', color: '#ffffff' }}>Our AI Subspace</strong>
+                    <span style={{ fontSize: '0.62rem', color: '#10b981', fontWeight: 800 }}>888 DOTS</span>
+                  </div>
+                  <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', margin: 0 }}>
+                    Mapping 888 dense cranial landmark vectors & 3D Procrustes mesh...
+                  </p>
+                </div>
+
+                <div style={{
+                  background: 'rgba(6, 12, 24, 0.85)',
+                  border: '1px solid rgba(0, 242, 254, 0.3)',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '0.85rem',
+                  textAlign: 'left'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                    <strong style={{ fontSize: '0.8rem', color: '#ffffff' }}>Google Gemini AI</strong>
+                    <span style={{ fontSize: '0.62rem', color: '#00f2fe', fontWeight: 800 }}>FLASH 3.8</span>
+                  </div>
+                  <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', margin: 0 }}>
+                    Evaluating ocular canthi, pupillary distance delta & cranial vault...
+                  </p>
+                </div>
+
+                <div style={{
+                  background: 'rgba(6, 12, 24, 0.85)',
+                  border: '1px solid rgba(0, 242, 254, 0.3)',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '0.85rem',
+                  textAlign: 'left'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                    <strong style={{ fontSize: '0.8rem', color: '#ffffff' }}>Groq LPU AI</strong>
+                    <span style={{ fontSize: '0.62rem', color: '#a855f7', fontWeight: 800 }}>QWEN 27B</span>
+                  </div>
+                  <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', margin: 0 }}>
+                    Analyzing sagittal facial symmetry, temple breadth & mandible taper...
+                  </p>
+                </div>
+
+                <div style={{
+                  background: 'rgba(6, 12, 24, 0.85)',
+                  border: '1px solid rgba(0, 242, 254, 0.3)',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '0.85rem',
+                  textAlign: 'left'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+                    <strong style={{ fontSize: '0.8rem', color: '#ffffff' }}>NVIDIA NIM AI</strong>
+                    <span style={{ fontSize: '0.62rem', color: '#f59e0b', fontWeight: 800 }}>NEMOTRON</span>
+                  </div>
+                  <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', margin: 0 }}>
+                    Cross-validating facial contours against ICAO 9303 biometric standard...
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* ── ALL RESULTS DISPLAYED AFTER APIS RESPOND ── */
+            <>
+              {/* Big Verified Status Card with Laser Beam & Confetti */}
+              <div className="glass-panel" style={{
             padding: '2.5rem 2rem',
             textAlign: 'center',
             background: verificationPassed
@@ -2537,6 +2729,8 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
               <span>Verify Another ID Document</span>
             </button>
           </div>
+            </>
+          )}
         </div>
       )}
 

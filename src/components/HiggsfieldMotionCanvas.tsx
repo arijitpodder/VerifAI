@@ -180,14 +180,14 @@ export const HiggsfieldMotionCanvas: React.FC<HiggsfieldMotionCanvasProps> = ({
         particles.push({
           x: Math.random() * width,
           y: Math.random() * height,
-          vx: (Math.random() - 0.5) * (type === 'spore' ? 0.4 : 0.8),
-          vy: type === 'spore' ? -(0.25 + Math.random() * 0.5) : (Math.random() - 0.5) * 0.8,
+          vx: (Math.random() - 0.5) * (type === 'spore' ? 0.9 : 1.8),
+          vy: type === 'spore' ? -(0.55 + Math.random() * 0.85) : (Math.random() - 0.5) * 1.8,
           radius: baseRadius,
           baseRadius,
           color,
           alpha: 0.3 + Math.random() * 0.6,
           pulsePhase: Math.random() * Math.PI * 2,
-          pulseSpeed: 0.02 + Math.random() * 0.03,
+          pulseSpeed: 0.03 + Math.random() * 0.04,
           type
         });
       }
@@ -199,6 +199,9 @@ export const HiggsfieldMotionCanvas: React.FC<HiggsfieldMotionCanvasProps> = ({
     let gridOffset = 0;
     let scanlineY = 0;
     let telemetryTimer = 0;
+    let lastRenderTime = 0;
+    const FRAME_INTERVAL = 33; // 30 FPS cap — maintains fluid visual fidelity while freeing main thread
+
     const telemetryCodes = [
       'SYS://HIGGSFIELD.QUANTUM_CORE',
       'ASTRA-6://888_DENSE_LANDMARKS',
@@ -210,6 +213,10 @@ export const HiggsfieldMotionCanvas: React.FC<HiggsfieldMotionCanvasProps> = ({
     let currentTelemetry = telemetryCodes[0];
 
     const render = (time: number) => {
+      animId = requestAnimationFrame(render);
+      if (time - lastRenderTime < FRAME_INTERVAL) return;
+      lastRenderTime = time;
+
       ctx.clearRect(0, 0, width, height);
 
       // ── 0. 🇮🇳 Indian National Tricolor (Tiranga) Ambient Waves ──
@@ -320,7 +327,9 @@ export const HiggsfieldMotionCanvas: React.FC<HiggsfieldMotionCanvasProps> = ({
         for (let j = i + 1; j < particles.length; j++) {
           const p2 = particles[j];
           const dx = p1.x - p2.x;
+          if (Math.abs(dx) >= connectDist) continue;
           const dy = p1.y - p2.y;
+          if (Math.abs(dy) >= connectDist) continue;
           if (dx * dx + dy * dy < connectDistSq) {
             ctx.moveTo(p1.x, p1.y);
             ctx.lineTo(p2.x, p2.y);
@@ -331,22 +340,22 @@ export const HiggsfieldMotionCanvas: React.FC<HiggsfieldMotionCanvasProps> = ({
 
       // ── 3. Particle Evolution, Gravitational Pull & Nature Wind ──
       particles.forEach(p => {
-        p.pulsePhase += p.pulseSpeed;
+        p.pulsePhase += p.pulseSpeed * 1.35;
         const pulse = 1 + Math.sin(p.pulsePhase) * 0.35;
         p.radius = p.baseRadius * pulse;
 
-        // Nature spores: gentle horizontal swaying like pollen/spores in a breeze
+        // Nature spores: gentle horizontal swaying like pollen/spores in a breeze (speed boosted)
         if (p.type === 'spore') {
-          p.x += Math.sin(time * 0.0015 + p.pulsePhase) * 0.45 + p.vx;
-          p.y += p.vy;
+          p.x += Math.sin(time * 0.0025 + p.pulsePhase) * 0.75 + p.vx * 1.35;
+          p.y += p.vy * 1.35;
           if (p.y < -20) {
             p.y = height + 20;
             p.x = Math.random() * width;
           }
         } else {
-          // Quantum / Cyber particles: standard momentum
-          p.x += p.vx;
-          p.y += p.vy;
+          // Quantum / Cyber particles: fast, fluid momentum
+          p.x += p.vx * 1.45;
+          p.y += p.vy * 1.45;
 
           // Screen wrap
           if (p.x < 0) p.x = width;
@@ -425,8 +434,6 @@ export const HiggsfieldMotionCanvas: React.FC<HiggsfieldMotionCanvasProps> = ({
       ctx.fillStyle = 'rgba(56, 189, 248, 0.18)';
       ctx.fillText(`⚡ ${currentTelemetry} | FPS: 60 | HIGGSFIELD: ACTIVE`, 24, height - 20);
       ctx.restore();
-
-      animId = requestAnimationFrame(render);
     };
 
     animId = requestAnimationFrame(render);

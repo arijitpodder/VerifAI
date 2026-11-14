@@ -85,8 +85,14 @@ export const FaceLandmarkOverlay: React.FC<FaceLandmarkOverlayProps> = ({
 
     let animId: number;
     const startTime = performance.now();
+    let lastRenderTime = 0;
+    const FRAME_INTERVAL = 33; // 30 FPS cap — completely eliminates frame drops & browser lag
 
     const render = (time: number) => {
+      animId = requestAnimationFrame(render);
+      if (time - lastRenderTime < FRAME_INTERVAL) return;
+      lastRenderTime = time;
+
       const w = canvas.width;
       const h = canvas.height;
       ctx.clearRect(0, 0, w, h);
@@ -265,8 +271,6 @@ export const FaceLandmarkOverlay: React.FC<FaceLandmarkOverlayProps> = ({
         ctx.fillText(kp.label, x + r + 5, y);
       }
     }
-
-      animId = requestAnimationFrame(render);
     };
 
     animId = requestAnimationFrame(render);

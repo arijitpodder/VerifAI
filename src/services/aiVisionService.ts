@@ -357,10 +357,11 @@ export async function verifyWithGeminiVision(
     ]);
 
     const candidateModels = [
+      'gemini-3.8-flash',
       'gemini-3.5-flash-lite',
+      'gemini-3.6-flash',
       'gemini-3.1-flash-lite',
-      'gemini-flash-lite-latest',
-      'gemini-2.5-flash-lite'
+      'gemini-flash-lite-latest'
     ];
     const promptText = buildBiometricPrompt(compMetrics);
 
@@ -393,7 +394,7 @@ export async function verifyWithGeminiVision(
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
-            signal: AbortSignal.timeout(10000)
+            signal: AbortSignal.timeout(6000)
           });
 
           const latencyMs = Math.round(performance.now() - startTime);
@@ -407,11 +408,10 @@ export async function verifyWithGeminiVision(
             if (rawText) {
               rawText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
               const parsed = JSON.parse(rawText);
-              const isSamePerson = Boolean(parsed.isSamePerson);
-              let confidenceScore = Math.max(0, Math.min(100, Math.round(Number(parsed.confidenceScore) || 50)));
-
-              if (isSamePerson && confidenceScore < 80) confidenceScore = 91;
-              if (!isSamePerson && confidenceScore > 40) confidenceScore = 18;
+              let rawConfidence = Number(parsed.confidenceScore ?? parsed.confidence ?? parsed.similarityScore);
+              if (rawConfidence <= 1.0 && rawConfidence > 0) rawConfidence *= 100;
+              const confidenceScore = Math.max(0, Math.min(100, Math.round(rawConfidence || (parsed.isSamePerson ? 90 : 20))));
+              const isSamePerson = Boolean(parsed.isSamePerson ?? (confidenceScore >= 65));
 
               const verdict: AIVisionResult['verdict'] = isSamePerson
                 ? confidenceScore >= 80 ? 'HIGH_MATCH' : 'MODERATE_MATCH'
@@ -547,7 +547,7 @@ export async function verifyWithGroqVision(
               'Authorization': `Bearer ${activeKey}`
             },
             body: JSON.stringify(payload),
-            signal: AbortSignal.timeout(10000)
+            signal: AbortSignal.timeout(6000)
           });
 
           const latencyMs = Math.round(performance.now() - startTime);
@@ -565,16 +565,10 @@ export async function verifyWithGroqVision(
           if (rawText) {
             rawText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
             const parsed = JSON.parse(rawText);
-            const isSamePerson = Boolean(parsed.isSamePerson ?? parsed.isMatch);
             let rawConfidence = Number(parsed.confidenceScore ?? parsed.confidence ?? parsed.similarityScore);
             if (rawConfidence <= 1.0 && rawConfidence > 0) rawConfidence *= 100;
-
-            let confidenceScore: number;
-            if (isSamePerson) {
-              confidenceScore = Math.max(88, Math.min(98, Math.round(rawConfidence >= 75 ? rawConfidence : 94)));
-            } else {
-              confidenceScore = Math.min(22, Math.max(10, Math.round(rawConfidence > 50 ? (100 - rawConfidence) : rawConfidence)));
-            }
+            const confidenceScore = Math.max(0, Math.min(100, Math.round(rawConfidence || (parsed.isSamePerson ? 92 : 22))));
+            const isSamePerson = Boolean(parsed.isSamePerson ?? parsed.isMatch ?? (confidenceScore >= 65));
 
             const verdict: AIVisionResult['verdict'] = isSamePerson
               ? confidenceScore >= 80 ? 'HIGH_MATCH' : 'MODERATE_MATCH'
@@ -716,7 +710,7 @@ export async function verifyWithOpenAIVision(
               'Authorization': `Bearer ${activeKey}`
             },
             body: JSON.stringify(payload),
-            signal: AbortSignal.timeout(10000)
+            signal: AbortSignal.timeout(6000)
           });
 
           const latencyMs = Math.round(performance.now() - startTime);
@@ -734,16 +728,10 @@ export async function verifyWithOpenAIVision(
           if (rawText) {
             rawText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
             const parsed = JSON.parse(rawText);
-            const isSamePerson = Boolean(parsed.isSamePerson ?? parsed.isMatch);
             let rawConfidence = Number(parsed.confidenceScore ?? parsed.confidence ?? parsed.similarityScore);
             if (rawConfidence <= 1.0 && rawConfidence > 0) rawConfidence *= 100;
-
-            let confidenceScore: number;
-            if (isSamePerson) {
-              confidenceScore = Math.max(88, Math.min(98, Math.round(rawConfidence >= 75 ? rawConfidence : 95)));
-            } else {
-              confidenceScore = Math.min(20, Math.max(10, Math.round(rawConfidence > 50 ? (100 - rawConfidence) : rawConfidence)));
-            }
+            const confidenceScore = Math.max(0, Math.min(100, Math.round(rawConfidence || (parsed.isSamePerson ? 93 : 20))));
+            const isSamePerson = Boolean(parsed.isSamePerson ?? parsed.isMatch ?? (confidenceScore >= 65));
 
             const verdict: AIVisionResult['verdict'] = isSamePerson
               ? confidenceScore >= 80 ? 'HIGH_MATCH' : 'MODERATE_MATCH'
@@ -783,179 +771,14 @@ export async function verifyWithOpenAIVision(
       }
     }
 
-    // Resilient Fallback: When direct NVIDIA NIM endpoints are blocked by client-side browser CORS
-    // (the standard behavior on static web hosts like GitHub Pages where browsers enforce preflight checks),
-    // seamlessly execute the NVIDIA NIM biometric evaluation via CORS-enabled cloud inference
-    const fallbackPrompt = buildBiometricPrompt(compMetrics);
-    const groqKey = getStoredApiKey('groq');
-    const geminiKey = getStoredApiKey('gemini');
-
-    if (groqKey) {
-      const groqEndpoints = getApiEndpoints('groq', 'https://api.groq.com', '/openai/v1/chat/completions');
-      for (const ep of groqEndpoints) {
-        try {
-          const res = await fetch(ep, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${groqKey}`
-            },
-            body: JSON.stringify({
-              model: 'openai/gpt-oss-20b',
-              messages: [
-                {
-                  role: 'system',
-                  content: 'You are an advanced biometric identity verification engine running NVIDIA NIM / GPT architecture. Return strictly valid JSON matching the requested schema.'
-                },
-                { role: 'user', content: fallbackPrompt }
-              ],
-              response_format: { type: 'json_object' },
-              max_tokens: 1500,
-              temperature: 0.1
-            }),
-            signal: AbortSignal.timeout(8000)
-          });
-
-          if (res.ok) {
-            const data = await res.json();
-            let rawText = data?.choices?.[0]?.message?.content;
-            if (rawText) {
-              rawText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
-              const parsed = JSON.parse(rawText);
-              const isSamePerson = Boolean(parsed.isSamePerson ?? parsed.isMatch);
-              let rawConfidence = Number(parsed.confidenceScore ?? parsed.confidence ?? parsed.similarityScore);
-              if (rawConfidence <= 1.0 && rawConfidence > 0) rawConfidence *= 100;
-
-              let confidenceScore: number;
-              if (isSamePerson) {
-                confidenceScore = Math.max(88, Math.min(98, Math.round(rawConfidence >= 75 ? rawConfidence : 95)));
-              } else {
-                confidenceScore = Math.min(20, Math.max(10, Math.round(rawConfidence > 50 ? (100 - rawConfidence) : rawConfidence)));
-              }
-
-              const verdict: AIVisionResult['verdict'] = isSamePerson
-                ? confidenceScore >= 80 ? 'HIGH_MATCH' : 'MODERATE_MATCH'
-                : 'DIVERGENCE_MISMATCH';
-
-              const latencyMs = Math.round(performance.now() - startTime);
-              liveTelemetry.httpStatus = 200;
-              liveTelemetry.latencyMs = latencyMs;
-              liveTelemetry.displayName = 'NVIDIA NIM AI (Nemotron Bolt)';
-              liveTelemetry.model = 'nvidia/nemotron-3.5-bolt-e4b';
-              liveTelemetry.statusText = '200 OK (NVIDIA NIM Cloud)';
-              liveTelemetry.isLiveCloud = true;
-              liveTelemetry.isExempted = false;
-
-              return {
-                provider: 'openai',
-                displayName: 'NVIDIA NIM AI (Nemotron Bolt)',
-                model: 'nvidia/nemotron-3.5-bolt-e4b',
-                isSamePerson,
-                confidenceScore,
-                verdict,
-                reasoning: parsed.reasoning || (isSamePerson ? 'NVIDIA NIM verified biometric points: pupillary distance, temple width, and facial symmetry match.' : 'NVIDIA NIM detected biometric disparity.'),
-                structuralScore: Math.round(Number(parsed.structuralScore) || (isSamePerson ? 96 : 18)),
-                proportionScore: Math.round(Number(parsed.proportionScore) || (isSamePerson ? 95 : 20)),
-                featureScore: Math.round(Number(parsed.featureScore) || (isSamePerson ? 94 : 16)),
-                edgeScore: Math.round(Number(parsed.edgeScore) || (isSamePerson ? 96 : 19)),
-                colorScore: Math.round(Number(parsed.colorScore) || (isSamePerson ? 89 : 25)),
-                breakdown: {
-                  pupillaryDistancePD: parsed.pupillaryDistancePD || (isSamePerson ? 'Inter-pupillary distance ratio conforms (2.7% delta)' : 'Pupillary distance disparity'),
-                  templeWidth: parsed.templeWidth || (isSamePerson ? 'Bitemporal breadth conforms to cardholder' : 'Bitemporal width mismatch'),
-                  facialSymmetry: parsed.facialSymmetry || (isSamePerson ? 'Bilateral symmetry index 96.7%' : 'Sagittal asymmetry divergence'),
-                  facialStructure: parsed.facialStructure || (isSamePerson ? 'Cranial vault and jaw taper collinear' : 'Cranial elongation mismatch')
-                },
-                telemetry: liveTelemetry
-              };
-            }
-          }
-        } catch {
-          // Continue to next fallback
-        }
-      }
-    }
-
-    if (geminiKey) {
-      const geminiEndpoint = getApiEndpoint(
-        'gemini',
-        'https://generativelanguage.googleapis.com',
-        `/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${geminiKey.trim()}`
-      );
-      try {
-        const res = await fetch(geminiEndpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: fallbackPrompt }] }],
-            generationConfig: { temperature: 0.1, responseMimeType: 'application/json' }
-          }),
-          signal: AbortSignal.timeout(8000)
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          let rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (rawText) {
-            rawText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
-            const parsed = JSON.parse(rawText);
-            const isSamePerson = Boolean(parsed.isSamePerson ?? parsed.isMatch);
-            let rawConfidence = Number(parsed.confidenceScore ?? parsed.confidence ?? parsed.similarityScore);
-            if (rawConfidence <= 1.0 && rawConfidence > 0) rawConfidence *= 100;
-
-            let confidenceScore: number;
-            if (isSamePerson) {
-              confidenceScore = Math.max(88, Math.min(98, Math.round(rawConfidence >= 75 ? rawConfidence : 95)));
-            } else {
-              confidenceScore = Math.min(20, Math.max(10, Math.round(rawConfidence > 50 ? (100 - rawConfidence) : rawConfidence)));
-            }
-
-            const verdict: AIVisionResult['verdict'] = isSamePerson
-              ? confidenceScore >= 80 ? 'HIGH_MATCH' : 'MODERATE_MATCH'
-              : 'DIVERGENCE_MISMATCH';
-
-            const latencyMs = Math.round(performance.now() - startTime);
-            liveTelemetry.httpStatus = 200;
-            liveTelemetry.latencyMs = latencyMs;
-            liveTelemetry.displayName = 'NVIDIA NIM AI (Nemotron Bolt)';
-            liveTelemetry.model = 'nvidia/nemotron-3.5-bolt-e4b';
-            liveTelemetry.statusText = '200 OK (NVIDIA NIM Cloud)';
-            liveTelemetry.isLiveCloud = true;
-            liveTelemetry.isExempted = false;
-
-            return {
-              provider: 'openai',
-              displayName: 'NVIDIA NIM AI (Nemotron Bolt)',
-              model: 'nvidia/nemotron-3.5-bolt-e4b',
-              isSamePerson,
-              confidenceScore,
-              verdict,
-              reasoning: parsed.reasoning || (isSamePerson ? 'NVIDIA NIM verified biometric points: pupillary distance, temple width, and facial symmetry match.' : 'NVIDIA NIM detected biometric disparity.'),
-              structuralScore: Math.round(Number(parsed.structuralScore) || (isSamePerson ? 96 : 18)),
-              proportionScore: Math.round(Number(parsed.proportionScore) || (isSamePerson ? 95 : 20)),
-              featureScore: Math.round(Number(parsed.featureScore) || (isSamePerson ? 94 : 16)),
-              edgeScore: Math.round(Number(parsed.edgeScore) || (isSamePerson ? 96 : 19)),
-              colorScore: Math.round(Number(parsed.colorScore) || (isSamePerson ? 89 : 25)),
-              breakdown: {
-                pupillaryDistancePD: parsed.pupillaryDistancePD || (isSamePerson ? 'Inter-pupillary distance ratio conforms (2.7% delta)' : 'Pupillary distance disparity'),
-                templeWidth: parsed.templeWidth || (isSamePerson ? 'Bitemporal breadth conforms to cardholder' : 'Bitemporal width mismatch'),
-                facialSymmetry: parsed.facialSymmetry || (isSamePerson ? 'Bilateral symmetry index 96.7%' : 'Sagittal asymmetry divergence'),
-                facialStructure: parsed.facialStructure || (isSamePerson ? 'Cranial vault and jaw taper collinear' : 'Cranial elongation mismatch')
-              },
-              telemetry: liveTelemetry
-            };
-          }
-        }
-      } catch {
-        // Fall through to final exemption
-      }
-    }
+    // If NVIDIA NIM models do not respond or fail, strictly exempt per user directive (never return fake results)
   } catch (err: any) {
     liveTelemetry.errorDetail = err?.message || 'Network error';
   }
 
   // If NVIDIA NIM encountered rate limit or network failure, exempt per user instruction
   liveTelemetry.isExempted = true;
-  const statusLabel = liveTelemetry.httpStatus > 0 ? `HTTP ${liveTelemetry.httpStatus}` : 'Network / CORS Restriction';
+  const statusLabel = liveTelemetry.httpStatus > 0 ? `HTTP ${liveTelemetry.httpStatus}` : 'Network / Timeout';
   liveTelemetry.statusText = liveTelemetry.statusText || 'Unavailable (Exempted from calculation)';
 
   return {

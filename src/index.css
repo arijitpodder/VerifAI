@@ -100,7 +100,7 @@ body {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-glass);
-  transition: all 0.25s ease-in-out;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .glass-panel:hover {
@@ -157,7 +157,7 @@ body {
   border-radius: var(--radius-md);
   border: 1px solid transparent;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.12s cubic-bezier(0.16, 1, 0.3, 1);
   font-family: var(--font-sans);
   text-decoration: none;
 }
@@ -459,7 +459,7 @@ body {
   height: 3px;
   background: linear-gradient(90deg, transparent 0%, #00f2fe 30%, #ffffff 50%, #00f2fe 70%, transparent 100%);
   box-shadow: 0 0 18px #00f2fe, 0 0 35px rgba(0, 242, 254, 0.6);
-  animation: scan 2s linear infinite;
+  animation: scan 1.2s linear infinite;
 }
 
 .laser-grid-overlay {
@@ -483,11 +483,11 @@ body {
 }
 
 .reticle-spin-cw {
-  animation: spinClockwise 12s linear infinite;
+  animation: spinClockwise 5s linear infinite;
 }
 
 .reticle-spin-ccw {
-  animation: spinCounterClockwise 8s linear infinite;
+  animation: spinCounterClockwise 3.5s linear infinite;
 }
 
 /* Indian Tricolor Glowing Shimmer */

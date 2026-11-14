@@ -84,7 +84,7 @@ export const CyberBootIntro: React.FC<CyberBootIntroProps> = ({ onComplete }) =>
     window.dispatchEvent(new CustomEvent('higgsfield-pulse', { detail: { color: '#ff9933' } }));
     setTimeout(() => {
       onComplete();
-    }, 500);
+    }, 200);
   };
 
   // Keyboard shortcut: Escape to skip intro immediately
@@ -111,13 +111,13 @@ export const CyberBootIntro: React.FC<CyberBootIntroProps> = ({ onComplete }) =>
 
   // Fast scene progression loop with optimized intervals to prevent main-thread freeze
   useEffect(() => {
-    // Fast 750ms switching so all 5 images cycle quickly and distinctly
+    // Fast 480ms switching so all 5 images cycle quickly and distinctly
     const sceneInterval = setInterval(() => {
       setCurrentSceneIndex((prev) => (prev + 1) % scenes.length);
-    }, 750);
+    }, 480);
 
     const startTime = Date.now();
-    const duration = 4800; // 4.8 seconds allows all 5 development images to be fully showcased rapidly
+    const duration = 2400; // 2.4 seconds snappy showcase
     const progressInterval = setInterval(() => {
       const elapsed = Date.now() - startTime;
       const pct = Math.min(100, Math.floor((elapsed / duration) * 100));
@@ -128,9 +128,9 @@ export const CyberBootIntro: React.FC<CyberBootIntroProps> = ({ onComplete }) =>
         clearInterval(sceneInterval);
         setTimeout(() => {
           handleFinish();
-        }, 300);
+        }, 180);
       }
-    }, 120);
+    }, 45);
 
     return () => {
       clearInterval(sceneInterval);
