@@ -1,4 +1,4 @@
-import { ShieldCheck, FileText, Layers, Scan, UserCheck, Sparkles, Zap } from 'lucide-react';
+import { ShieldCheck, FileText, Layers, Scan, UserCheck, Sparkles, Zap, Smartphone, Monitor } from 'lucide-react';
 import type { CanvasMode } from './HiggsfieldMotionCanvas';
 import { soundEffects } from '../services/soundEffects';
 import { KavachHudBadge } from './KavachHudBadge';
@@ -15,6 +15,8 @@ interface NavbarProps {
   motionMode: CanvasMode;
   onChangeMotionMode: (mode: CanvasMode) => void;
   onReplayBoot: () => void;
+  isMobileVersion?: boolean;
+  onToggleMobileVersion?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -26,7 +28,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   onChangeMode,
   motionMode,
   onChangeMotionMode,
-  onReplayBoot
+  onReplayBoot,
+  isMobileVersion = false,
+  onToggleMobileVersion
 }) => {
   return (
     <header style={{
@@ -310,6 +314,44 @@ export const Navbar: React.FC<NavbarProps> = ({
             <Layers size={14} color="var(--cyan-primary)" />
             <span style={{ color: 'var(--cyan-primary)' }}>Architecture</span>
           </button>
+
+          {/* Top Right Corner Mobile Switcher Button */}
+          {onToggleMobileVersion && (
+            <button
+              onClick={() => {
+                soundEffects.playLockOn();
+                onToggleMobileVersion();
+              }}
+              className="btn btn-secondary mobile-navbar-switch-btn"
+              title={isMobileVersion ? 'Switch back to Desktop Mode' : 'Switch to 2080 Cyber Mobile Mode'}
+              style={{
+                padding: '0.4rem 0.85rem',
+                fontSize: '0.78rem',
+                borderColor: isMobileVersion ? 'rgba(56, 189, 248, 0.8)' : 'rgba(0, 242, 254, 0.45)',
+                background: isMobileVersion
+                  ? 'linear-gradient(135deg, rgba(56, 189, 248, 0.25) 0%, rgba(139, 92, 246, 0.25) 100%)'
+                  : 'linear-gradient(135deg, rgba(0, 242, 254, 0.12) 0%, rgba(99, 102, 241, 0.12) 100%)',
+                color: isMobileVersion ? '#38bdf8' : '#00f2fe',
+                boxShadow: isMobileVersion ? '0 0 14px rgba(56, 189, 248, 0.4)' : '0 0 10px rgba(0, 242, 254, 0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.45rem',
+                fontWeight: 700
+              }}
+            >
+              {isMobileVersion ? (
+                <>
+                  <Monitor size={15} color="#38bdf8" />
+                  <span>Desktop View</span>
+                </>
+              ) : (
+                <>
+                  <Smartphone size={15} color="#00f2fe" />
+                  <span>Mobile View</span>
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
     </header>

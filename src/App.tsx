@@ -40,11 +40,33 @@ import type { CanvasMode } from './components/HiggsfieldMotionCanvas';
 import { CyberBootIntro } from './components/CyberBootIntro';
 import { QuantumBurstOverlay } from './components/QuantumBurstOverlay';
 import { KavachSecurityModal } from './components/KavachSecurityModal';
-import { X, Cpu } from 'lucide-react';
+import { CyberMobileView } from './components/CyberMobileView';
+import { soundEffects } from './services/soundEffects';
+import { X, Cpu, Smartphone } from 'lucide-react';
 
 export const App: React.FC = () => {
   // Application Mode: 'PIPELINE' | 'ID_FACE_MATCH' | 'ID_LAB' | 'FACE_LAB'
   const [appMode, setAppMode] = useState<AppMode>('PIPELINE');
+
+  // Mobile 2080 Version Mode State & Responsive Screen Detection
+  const [isMobileScreen, setIsMobileScreen] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth <= 860;
+    }
+    return false;
+  });
+  const [forceDesktop, setForceDesktop] = useState<boolean>(false);
+  const [forceMobile, setForceMobile] = useState<boolean>(false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobileScreen(window.innerWidth <= 860);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const activeMobileMode = forceMobile || (isMobileScreen && !forceDesktop);
 
   // Futuristic Motion & Boot Intro States
   const [showBootIntro, setShowBootIntro] = useState<boolean>(true);
@@ -536,6 +558,165 @@ export const App: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
+  // Main interactive workflow & lab content (shared seamlessly across desktop & mobile)
+  const mainBodyContent = (
+    <>
+      {/* Render Standard 6-Layer Multi-Step Pipeline (PRIMARY FIRST) */}
+      {appMode === 'PIPELINE' && (
+        <>
+          {!activeMobileMode && (
+            <HeroBanner
+              currentStep={currentStep}
+              onStepClick={(step) => setCurrentStep(step)}
+            />
+          )}
+
+          {currentStep === 1 && (
+            <DocumentUploadStep
+              selectedPreset={selectedPreset}
+              onSelectPreset={(preset) => processPreset(preset)}
+              onCustomUpload={handleCustomUpload}
+              onRotateDocument={handleRotateDocument}
+              onProceedToAnalysis={() => setCurrentStep(2)}
+              onRunFullWorkflow={handleRunFullWorkflow}
+              documentDataUri={documentUri}
+              onNavigateToFaceMatch={() => setAppMode('ID_FACE_MATCH')}
+            />
+          )}
+
+          {currentStep === 2 && (
+            <OcrAnalysisStep
+              fields={fields}
+              consistency={consistency}
+              onUpdateFields={(updatedFields) => {
+                setFields(updatedFields);
+                const c = validateConsistency(updatedFields);
+                setConsistency(c);
+                const updatedRisk = evaluateOverallRisk(c, forensics, authority, biometrics);
+                setRiskBreakdown(updatedRisk);
+                // Also keep selectedPreset name and documentNumber updated if it's a custom upload
+                setSelectedPreset((prev) => ({
+                  ...prev,
+                  name: updatedFields.fullName || prev.name,
+                  extractedFields: updatedFields
+                }));
+              }}
+              onNext={() => setCurrentStep(3)}
+              onPrev={() => setCurrentStep(1)}
+            />
+          )}
+
+          {currentStep === 3 && (
+            <QrCodeStep
+              documentUri={documentUri}
+              fields={fields}
+              onNext={(decoded) => {
+                if (decoded) setQrData(decoded);
+                setCurrentStep(4);
+              }}
+              onSkip={() => {
+                // Skipping QR verification is neutral and does not affect the risk score
+                setCurrentStep(4);
+              }}
+              onPrev={() => setCurrentStep(2)}
+            />
+          )}
+
+          {currentStep === 4 && (
+            <ForensicViewerStep
+              forensics={forensics}
+              originalImageUri={documentUri}
+              onNext={() => setCurrentStep(5)}
+              onPrev={() => setCurrentStep(3)}
+            />
+          )}
+
+          {currentStep === 5 && (
+            <AuthorityCheckStep
+              authority={authority}
+              onNext={() => setCurrentStep(6)}
+              onPrev={() => setCurrentStep(4)}
+            />
+          )}
+
+          {currentStep === 6 && (
+            <BiometricsStep
+              preset={selectedPreset}
+              biometrics={biometrics}
+              onUpdateBiometrics={(updated) => {
+                setBiometrics(updated);
+                const updatedRisk = evaluateOverallRisk(consistency, forensics, authority, updated);
+                setRiskBreakdown(updatedRisk);
+              }}
+              onNext={() => setCurrentStep(7)}
+              onPrev={() => setCurrentStep(5)}
+            />
+          )}
+
+          {currentStep === 7 && (
+            <RiskEngineStep
+              riskBreakdown={riskBreakdown}
+              onOpenCertificate={() => setIsCertificateModalOpen(true)}
+              onExportJson={handleExportJson}
+              onReset={() => {
+                setCurrentStep(1);
+              }}
+              onPrev={() => setCurrentStep(6)}
+            />
+          )}
+        </>
+      )}
+
+      {/* Render Dedicated ID Card & Live Webcam Face Matcher (SECOND) */}
+      {appMode === 'ID_FACE_MATCH' && (
+        <IdFaceMatchLab
+          onNavigateToPipeline={() => setAppMode('PIPELINE')}
+        />
+      )}
+
+      {/* Render Dedicated ID Verification Lab */}
+      {appMode === 'ID_LAB' && (
+        <IdVerificationLab
+          initialDocumentUri={documentUri}
+          initialFields={fields}
+          initialConsistency={consistency}
+          initialForensics={forensics}
+          initialPreset={selectedPreset}
+          initialAuthority={authority}
+          onSyncWithMainPipeline={(doc, f, c, fRes, auth, preset) => {
+            setDocumentUri(doc);
+            setFields(f);
+            setConsistency(c);
+            setForensics(fRes);
+            if (auth) setAuthority(auth);
+            if (preset) setSelectedPreset(preset);
+            const updatedAuth = auth || authority;
+            const updatedRisk = evaluateOverallRisk(c, fRes, updatedAuth, biometrics);
+            setRiskBreakdown(updatedRisk);
+          }}
+          onNavigateToFaceLab={() => setAppMode('FACE_LAB')}
+          onNavigateToPipeline={() => setAppMode('PIPELINE')}
+          onNavigateToFaceMatch={() => setAppMode('ID_FACE_MATCH')}
+        />
+      )}
+
+      {/* Render Dedicated Face Verification Lab */}
+      {appMode === 'FACE_LAB' && (
+        <FaceVerificationLab
+          initialRefPhotoUri={svgToDataUri(selectedPreset.portraitSvg)}
+          initialLivePhotoUri={svgToDataUri(selectedPreset.liveCapturedSvg)}
+          initialPreset={selectedPreset}
+          onSyncBiometrics={(bioRes) => {
+            bioRes.isUserCaptured = false;
+            setBiometrics(bioRes);
+            const updatedRisk = evaluateOverallRisk(consistency, forensics, authority, bioRes);
+            setRiskBreakdown(updatedRisk);
+          }}
+        />
+      )}
+    </>
+  );
+
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', position: 'relative' }}>
       {/* 2080 Quantum Particle Burst & Explosive Shatter Canvas Overlay */}
@@ -549,173 +730,67 @@ export const App: React.FC = () => {
         <CyberBootIntro onComplete={() => setShowBootIntro(false)} />
       )}
 
-      {/* Navbar with 3-Mode Switcher & Motion Controller */}
-      <Navbar
-        onOpenArchitecture={() => setIsArchitectureModalOpen(true)}
-        onOpenAuditLog={() => setIsAuditLogModalOpen(true)}
-        onOpenKavach={() => setIsKavachModalOpen(true)}
-        auditCount={auditLogs.length}
-        activeMode={appMode}
-        onChangeMode={(m) => setAppMode(m)}
-        motionMode={motionMode}
-        onChangeMotionMode={setMotionMode}
-        onReplayBoot={() => setShowBootIntro(true)}
-      />
+      {/* ── TOP RIGHT CORNER MOBILE SWITCHER QUICK TOGGLE (ON DESKTOP) ── */}
+      {!activeMobileMode && (
+        <button
+          onClick={() => {
+            soundEffects.playLockOn();
+            setForceMobile(true);
+            setForceDesktop(false);
+          }}
+          className="mobile-fixed-top-corner-toggle"
+          title="Switch to 2080 Cyber Mobile Mode"
+          aria-label="Toggle Mobile Mode"
+        >
+          <Smartphone size={15} />
+          <span>MOBILE</span>
+        </button>
+      )}
 
-      {/* Main Content Area */}
-      <main className="container" style={{ flex: 1, paddingBottom: '3rem', paddingTop: '1.25rem' }}>
-        {/* Render Standard 6-Layer Multi-Step Pipeline (PRIMARY FIRST) */}
-        {appMode === 'PIPELINE' && (
-          <>
-            <HeroBanner
-              currentStep={currentStep}
-              onStepClick={(step) => setCurrentStep(step)}
-            />
+      {/* Navbar with 3-Mode Switcher & Motion Controller (DESKTOP MODE) */}
+      {!activeMobileMode && (
+        <Navbar
+          onOpenArchitecture={() => setIsArchitectureModalOpen(true)}
+          onOpenAuditLog={() => setIsAuditLogModalOpen(true)}
+          onOpenKavach={() => setIsKavachModalOpen(true)}
+          auditCount={auditLogs.length}
+          activeMode={appMode}
+          onChangeMode={(m) => setAppMode(m)}
+          motionMode={motionMode}
+          onChangeMotionMode={setMotionMode}
+          onReplayBoot={() => setShowBootIntro(true)}
+          isMobileVersion={activeMobileMode}
+          onToggleMobileVersion={() => {
+            soundEffects.playLockOn();
+            setForceMobile(true);
+            setForceDesktop(false);
+          }}
+        />
+      )}
 
-            {currentStep === 1 && (
-              <DocumentUploadStep
-                selectedPreset={selectedPreset}
-                onSelectPreset={(preset) => processPreset(preset)}
-                onCustomUpload={handleCustomUpload}
-                onRotateDocument={handleRotateDocument}
-                onProceedToAnalysis={() => setCurrentStep(2)}
-                onRunFullWorkflow={handleRunFullWorkflow}
-                documentDataUri={documentUri}
-                onNavigateToFaceMatch={() => setAppMode('ID_FACE_MATCH')}
-              />
-            )}
-
-            {currentStep === 2 && (
-              <OcrAnalysisStep
-                fields={fields}
-                consistency={consistency}
-                onUpdateFields={(updatedFields) => {
-                  setFields(updatedFields);
-                  const c = validateConsistency(updatedFields);
-                  setConsistency(c);
-                  const updatedRisk = evaluateOverallRisk(c, forensics, authority, biometrics);
-                  setRiskBreakdown(updatedRisk);
-                  // Also keep selectedPreset name and documentNumber updated if it's a custom upload
-                  setSelectedPreset((prev) => ({
-                    ...prev,
-                    name: updatedFields.fullName || prev.name,
-                    extractedFields: updatedFields
-                  }));
-                }}
-                onNext={() => setCurrentStep(3)}
-                onPrev={() => setCurrentStep(1)}
-              />
-            )}
-
-            {currentStep === 3 && (
-              <QrCodeStep
-                documentUri={documentUri}
-                fields={fields}
-                onNext={(decoded) => {
-                  if (decoded) setQrData(decoded);
-                  setCurrentStep(4);
-                }}
-                onSkip={() => {
-                  // Skipping QR verification is neutral and does not affect the risk score
-                  setCurrentStep(4);
-                }}
-                onPrev={() => setCurrentStep(2)}
-              />
-            )}
-
-            {currentStep === 4 && (
-              <ForensicViewerStep
-                forensics={forensics}
-                originalImageUri={documentUri}
-                onNext={() => setCurrentStep(5)}
-                onPrev={() => setCurrentStep(3)}
-              />
-            )}
-
-            {currentStep === 5 && (
-              <AuthorityCheckStep
-                authority={authority}
-                onNext={() => setCurrentStep(6)}
-                onPrev={() => setCurrentStep(4)}
-              />
-            )}
-
-            {currentStep === 6 && (
-              <BiometricsStep
-                preset={selectedPreset}
-                biometrics={biometrics}
-                onUpdateBiometrics={(updated) => {
-                  setBiometrics(updated);
-                  const updatedRisk = evaluateOverallRisk(consistency, forensics, authority, updated);
-                  setRiskBreakdown(updatedRisk);
-                }}
-                onNext={() => setCurrentStep(7)}
-                onPrev={() => setCurrentStep(5)}
-              />
-            )}
-
-            {currentStep === 7 && (
-              <RiskEngineStep
-                riskBreakdown={riskBreakdown}
-                onOpenCertificate={() => setIsCertificateModalOpen(true)}
-                onExportJson={handleExportJson}
-                onReset={() => {
-                  setCurrentStep(1);
-                }}
-                onPrev={() => setCurrentStep(6)}
-              />
-            )}
-          </>
-        )}
-
-        {/* Render Dedicated ID Card & Live Webcam Face Matcher (SECOND) */}
-        {appMode === 'ID_FACE_MATCH' && (
-          <IdFaceMatchLab
-            onNavigateToPipeline={() => setAppMode('PIPELINE')}
-          />
-        )}
-
-        {/* Render Dedicated ID Verification Lab */}
-        {appMode === 'ID_LAB' && (
-          <IdVerificationLab
-            initialDocumentUri={documentUri}
-            initialFields={fields}
-            initialConsistency={consistency}
-            initialForensics={forensics}
-            initialPreset={selectedPreset}
-            initialAuthority={authority}
-            onSyncWithMainPipeline={(doc, f, c, fRes, auth, preset) => {
-              setDocumentUri(doc);
-              setFields(f);
-              setConsistency(c);
-              setForensics(fRes);
-              if (auth) setAuthority(auth);
-              if (preset) setSelectedPreset(preset);
-              const updatedAuth = auth || authority;
-              const updatedRisk = evaluateOverallRisk(c, fRes, updatedAuth, biometrics);
-              setRiskBreakdown(updatedRisk);
-            }}
-            onNavigateToFaceLab={() => setAppMode('FACE_LAB')}
-            onNavigateToPipeline={() => setAppMode('PIPELINE')}
-            onNavigateToFaceMatch={() => setAppMode('ID_FACE_MATCH')}
-          />
-        )}
-
-        {/* Render Dedicated Face Verification Lab */}
-        {appMode === 'FACE_LAB' && (
-          <FaceVerificationLab
-            initialRefPhotoUri={svgToDataUri(selectedPreset.portraitSvg)}
-            initialLivePhotoUri={svgToDataUri(selectedPreset.liveCapturedSvg)}
-            initialPreset={selectedPreset}
-            onSyncBiometrics={(bioRes) => {
-              bioRes.isUserCaptured = false;
-    setBiometrics(bioRes);
-              const updatedRisk = evaluateOverallRisk(consistency, forensics, authority, bioRes);
-              setRiskBreakdown(updatedRisk);
-            }}
-          />
-        )}
-      </main>
+      {/* Main Content Area: Cyber Mobile View vs Standard Desktop View */}
+      {activeMobileMode ? (
+        <CyberMobileView
+          currentStep={currentStep}
+          onStepClick={(step) => setCurrentStep(step)}
+          activeMode={appMode}
+          onChangeMode={(m) => setAppMode(m)}
+          onExitMobile={() => {
+            soundEffects.playLockOn();
+            setForceMobile(false);
+            setForceDesktop(true);
+          }}
+          onOpenKavach={() => setIsKavachModalOpen(true)}
+          onOpenAuditLog={() => setIsAuditLogModalOpen(true)}
+          auditCount={auditLogs.length}
+        >
+          {mainBodyContent}
+        </CyberMobileView>
+      ) : (
+        <main className="container" style={{ flex: 1, paddingBottom: '3rem', paddingTop: '1.25rem' }}>
+          {mainBodyContent}
+        </main>
+      )}
 
       {/* Automated Pipeline Loading Overlay */}
       {isAutomating && (
@@ -893,29 +968,31 @@ export const App: React.FC = () => {
         <KavachSecurityModal onClose={() => setIsKavachModalOpen(false)} />
       )}
 
-      {/* Footer */}
-      <footer style={{
-        borderTop: '1px solid var(--border-subtle)',
-        background: 'rgba(6, 9, 19, 0.95)',
-        padding: '1.5rem 0',
-        fontSize: '0.78rem',
-        color: 'var(--text-muted)'
-      }}>
-        <div className="container" style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '1rem'
+      {/* Footer (DESKTOP MODE) */}
+      {!activeMobileMode && (
+        <footer style={{
+          borderTop: '1px solid var(--border-subtle)',
+          background: 'rgba(6, 9, 19, 0.95)',
+          padding: '1.5rem 0',
+          fontSize: '0.78rem',
+          color: 'var(--text-muted)'
         }}>
-          <div>
-            <strong style={{ color: '#ffffff' }}>VERIFAI</strong> — Real OCR • Pixel ELA Forensics • Government DB Gateway • Live Webcam Biometrics.
+          <div className="container" style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '1rem'
+          }}>
+            <div>
+              <strong style={{ color: '#ffffff' }}>VERIFAI</strong> — Real OCR • Pixel ELA Forensics • Government DB Gateway • Live Webcam Biometrics.
+            </div>
+            <div>
+              ICAO 9303 Compliant • Normalized Cross-Correlation Facial Biometrics
+            </div>
           </div>
-          <div>
-            ICAO 9303 Compliant • Normalized Cross-Correlation Facial Biometrics
-          </div>
-        </div>
-      </footer>
+        </footer>
+      )}
 
     </div>
   );

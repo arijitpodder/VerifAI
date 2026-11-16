@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import './styles/kavach2080Theme.css'
+import './styles/mobile2080Theme.css'
 import App from './App.tsx'
 
 // Purge stale application cache across releases on GitHub Pages
