@@ -1,12 +1,14 @@
 import { ShieldCheck, FileText, Layers, Scan, UserCheck, Sparkles, Zap } from 'lucide-react';
 import type { CanvasMode } from './HiggsfieldMotionCanvas';
 import { soundEffects } from '../services/soundEffects';
+import { KavachHudBadge } from './KavachHudBadge';
 
 export type AppMode = 'PIPELINE' | 'ID_FACE_MATCH' | 'ID_LAB' | 'FACE_LAB';
 
 interface NavbarProps {
   onOpenArchitecture: () => void;
   onOpenAuditLog: () => void;
+  onOpenKavach: () => void;
   auditCount: number;
   activeMode: AppMode;
   onChangeMode: (mode: AppMode) => void;
@@ -18,6 +20,7 @@ interface NavbarProps {
 export const Navbar: React.FC<NavbarProps> = ({
   onOpenArchitecture,
   onOpenAuditLog,
+  onOpenKavach,
   auditCount,
   activeMode,
   onChangeMode,
@@ -246,8 +249,11 @@ export const Navbar: React.FC<NavbarProps> = ({
           </select>
         </div>
 
-        {/* Header Tools & Replay Boot */}
+        {/* Header Tools, KAVACH 5.2 & Replay Boot */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          {/* KAVACH 5.2 AI Defense System HUD Pill */}
+          <KavachHudBadge onClick={onOpenKavach} />
+
           <button
             onClick={() => {
               soundEffects.playTirangaHeroicTheme();

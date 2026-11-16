@@ -24,8 +24,10 @@ import {
   Crop,
   Maximize2,
   ShieldAlert,
-  CheckCircle2
+  CheckCircle2,
+  QrCode
 } from 'lucide-react';
+import { soundEffects } from '../services/soundEffects';
 
 interface QrCodeStepProps {
   documentUri: string;
@@ -51,6 +53,10 @@ export const QrCodeStep: React.FC<QrCodeStepProps> = ({
   const [selectedCropKey, setSelectedCropKey] = useState<string>('AUTO');
   const [copied, setCopied] = useState<boolean>(false);
   const [isBackSideLoaded, setIsBackSideLoaded] = useState<boolean>(false);
+
+  // Cyber Loading & Diagnostic Telemetry States
+  const [scanProgress, setScanProgress] = useState<number>(15);
+  const [scanMessage, setScanMessage] = useState<string>('Calibrating 2D Matrix Optical Quadrants & Aspect Ratios...');
 
   // Live Camera States (Front vs Back Camera Switcher)
   const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
@@ -113,21 +119,46 @@ export const QrCodeStep: React.FC<QrCodeStepProps> = ({
     startCamera(nextMode);
   };
 
-  // Perform full auto-crop & multi-engine scan
+  // Perform full auto-crop & multi-engine scan with high-tech cyber progress
   const performScan = async (imageSrc: string, customCrop?: CropBox, isBackOverride?: boolean) => {
     setIsScanning(true);
+    setScanProgress(15);
+    setScanMessage('Calibrating 2D Matrix Optical Quadrants & Aspect Ratios...');
+    soundEffects.playScanLaser();
+
+    // Allow the transition burst animation from the previous step to initiate smoothly without main-thread contention
+    await new Promise((resolve) => setTimeout(resolve, 60));
+
+    const t1 = setTimeout(() => {
+      setScanProgress(45);
+      setScanMessage('Auto-Cropping High-Contrast Barcode Substrate (ECC Level H)...');
+    }, 280);
+
+    const t2 = setTimeout(() => {
+      setScanProgress(75);
+      setScanMessage('Cross-Referencing Cryptographic Payload against Document Metadata...');
+    }, 560);
+
     try {
       const isSecondFace = isBackOverride !== undefined ? isBackOverride : isBackSideLoaded;
-      const res = await autoCropAndScanQr(imageSrc, fields, customCrop, {
-        isBackSide: isSecondFace,
-        isSecondFace
-      });
+      const [res] = await Promise.all([
+        autoCropAndScanQr(imageSrc, fields, customCrop, {
+          isBackSide: isSecondFace,
+          isSecondFace
+        }),
+        // Ensure the cyber loading screen is smoothly visible for at least 850ms so the user experiences the cyber graphics
+        new Promise((resolve) => setTimeout(resolve, 850))
+      ]);
+
+      setScanProgress(100);
+      setScanMessage('2D QR Barcode Decoded & Cryptographically Verified.');
       setScanResult(res);
 
       if (res.detected && res.parsed) {
         setCroppedQrUri(res.croppedQrUri || null);
         setCurrentBox(res.cropBox || null);
         setActivePayload(res.parsed);
+        soundEffects.playLockOn();
       } else {
         // No QR detected on this image face (e.g. Front Side of Aadhaar Card)
         setCroppedQrUri(null);
@@ -140,7 +171,11 @@ export const QrCodeStep: React.FC<QrCodeStepProps> = ({
       setCurrentBox(null);
       setActivePayload(null);
     } finally {
-      setIsScanning(false);
+      clearTimeout(t1);
+      clearTimeout(t2);
+      setTimeout(() => {
+        setIsScanning(false);
+      }, 200);
     }
   };
 
@@ -254,7 +289,234 @@ export const QrCodeStep: React.FC<QrCodeStepProps> = ({
         </div>
       </div>
 
-      <div className="grid-2">
+      {isScanning ? (
+        /* ── YEAR 2080 CYBER QR MATRIX AUTONOMOUS SCANNER LOADER ── */
+        <div
+          className="glass-panel cyber-2080-card"
+          style={{
+            padding: '3.5rem 2rem',
+            textAlign: 'center',
+            border: '2px solid rgba(0, 242, 254, 0.45)',
+            boxShadow: '0 0 50px rgba(0, 242, 254, 0.22)',
+            position: 'relative',
+            overflow: 'hidden',
+            borderRadius: 'var(--radius-xl)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '1.6rem',
+            minHeight: '460px',
+            justifyContent: 'center'
+          }}
+        >
+          {/* Holographic Laser Scanline */}
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'linear-gradient(180deg, transparent, rgba(0, 242, 254, 0.12), transparent)',
+              animation: 'laserSweep 1s infinite'
+            }}
+          />
+
+          {/* Top Year 2080 Telemetry Stamp */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.85rem',
+            fontSize: '0.72rem',
+            fontFamily: 'var(--font-mono)',
+            color: 'var(--text-muted)'
+          }}>
+            <span>SYS://YEAR-2080.QR-SCANNER</span>
+            <span style={{ color: '#00f2fe', fontWeight: 800 }}>🛡️ KAVACH 5.2 ENCRYPTED GATEWAY</span>
+          </div>
+
+          {/* Multi-Layer Gyro & 2D Matrix Hub Loader */}
+          <div style={{ position: 'relative', width: '130px', height: '130px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {/* Outer Gyro Ring (Rotating Clockwise) */}
+            <div
+              className="reticle-spin-cw"
+              style={{
+                position: 'absolute',
+                inset: 0,
+                borderRadius: '50%',
+                border: '2px dashed rgba(0, 242, 254, 0.75)',
+                boxShadow: '0 0 30px rgba(0, 242, 254, 0.3)'
+              }}
+            />
+            {/* Middle Gyro Ring (Counter-Rotating) */}
+            <div
+              className="reticle-spin-ccw"
+              style={{
+                position: 'absolute',
+                inset: '12px',
+                borderRadius: '50%',
+                border: '2px solid transparent',
+                borderTopColor: '#00f2fe',
+                borderBottomColor: '#10b981'
+              }}
+            />
+            {/* Core Glowing Hub with QR Icon */}
+            <div
+              style={{
+                width: '64px',
+                height: '64px',
+                borderRadius: '14px',
+                background: 'radial-gradient(circle, rgba(0, 242, 254, 0.25) 0%, rgba(6, 12, 24, 0.95) 100%)',
+                border: '1.5px solid #00f2fe',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 0 20px rgba(0, 242, 254, 0.6)'
+              }}
+            >
+              <QrCode size={34} color="#00f2fe" style={{ filter: 'drop-shadow(0 0 8px rgba(0, 242, 254, 0.9))' }} />
+            </div>
+          </div>
+
+          {/* Title & Real-time Diagnostic Telemetry */}
+          <div>
+            <h3 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#ffffff', letterSpacing: '0.02em', marginBottom: '0.45rem' }}>
+              Scanning &amp; Resolving 2D QR Barcode Matrix
+            </h3>
+            <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', maxWidth: '640px', margin: '0 auto' }}>
+              Executing multi-region optical quadrant detection, ECC Reed-Solomon error correction, and cryptographic payload decoding.
+            </p>
+          </div>
+
+          {/* Dynamic Diagnostic Step Message */}
+          <div style={{
+            background: 'rgba(0, 242, 254, 0.06)',
+            border: '1px solid rgba(0, 242, 254, 0.3)',
+            borderRadius: 'var(--radius-sm)',
+            padding: '0.65rem 1.4rem',
+            minHeight: '44px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <span style={{
+              fontSize: '0.82rem',
+              color: '#00f2fe',
+              fontFamily: 'var(--font-mono)',
+              fontWeight: 600,
+              textShadow: '0 0 10px rgba(0, 242, 254, 0.4)'
+            }}>
+              &gt; {scanMessage}
+            </span>
+          </div>
+
+          {/* Shimmer Progress Bar */}
+          <div style={{ width: '100%', maxWidth: '520px' }}>
+            <div style={{
+              height: '8px',
+              background: 'rgba(255, 255, 255, 0.08)',
+              borderRadius: '4px',
+              overflow: 'hidden',
+              position: 'relative'
+            }}>
+              <div
+                style={{
+                  height: '100%',
+                  width: `${scanProgress}%`,
+                  background: 'linear-gradient(90deg, #00f2fe 0%, #10b981 100%)',
+                  boxShadow: '0 0 14px rgba(0, 242, 254, 0.7)',
+                  transition: 'width 0.3s ease-out'
+                }}
+              />
+            </div>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              marginTop: '0.5rem',
+              fontSize: '0.72rem',
+              color: 'var(--text-muted)',
+              fontFamily: 'var(--font-mono)'
+            }}>
+              <span>STATUS: DEEP SUBSTRATE PROBE</span>
+              <span style={{ color: '#00f2fe', fontWeight: 800 }}>{scanProgress}% RESOLVED</span>
+            </div>
+          </div>
+
+          {/* 3 Telemetry Feature Badges */}
+          <div style={{
+            display: 'flex',
+            gap: '0.85rem',
+            flexWrap: 'wrap',
+            justifyContent: 'center',
+            marginTop: '0.5rem'
+          }}>
+            <span style={{
+              fontSize: '0.7rem',
+              padding: '0.3rem 0.75rem',
+              borderRadius: '4px',
+              background: 'rgba(0, 242, 254, 0.08)',
+              border: '1px solid rgba(0, 242, 254, 0.25)',
+              color: '#00f2fe',
+              fontFamily: 'var(--font-mono)'
+            }}>
+              4-QUADRANT PROJECTION
+            </span>
+            <span style={{
+              fontSize: '0.7rem',
+              padding: '0.3rem 0.75rem',
+              borderRadius: '4px',
+              background: 'rgba(16, 185, 129, 0.08)',
+              border: '1px solid rgba(16, 185, 129, 0.25)',
+              color: '#10b981',
+              fontFamily: 'var(--font-mono)'
+            }}>
+              ECC REED-SOLOMON DECODER
+            </span>
+            <span style={{
+              fontSize: '0.7rem',
+              padding: '0.3rem 0.75rem',
+              borderRadius: '4px',
+              background: 'rgba(168, 85, 247, 0.08)',
+              border: '1px solid rgba(168, 85, 247, 0.25)',
+              color: '#a855f7',
+              fontFamily: 'var(--font-mono)'
+            }}>
+              SHA-256 INTEGRITY LOCKED
+            </span>
+          </div>
+
+          {/* Quick Nav Controls during scanning */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            width: '100%',
+            maxWidth: '520px',
+            marginTop: '0.5rem',
+            paddingTop: '0.85rem',
+            borderTop: '1px solid rgba(255, 255, 255, 0.08)'
+          }}>
+            <button onClick={onPrev} className="btn btn-secondary" style={{ fontSize: '0.78rem', padding: '0.35rem 0.85rem' }}>
+              <ArrowLeft size={13} />
+              <span>Back: Step 2</span>
+            </button>
+            <button
+              onClick={onSkip}
+              className="btn btn-secondary"
+              style={{
+                fontSize: '0.78rem',
+                padding: '0.35rem 0.85rem',
+                borderColor: 'rgba(255, 255, 255, 0.15)',
+                background: 'rgba(255, 255, 255, 0.04)',
+                color: 'var(--text-secondary)'
+              }}
+            >
+              <SkipForward size={13} />
+              <span>Skip (Score Unaffected)</span>
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="grid-2">
         {/* Left Column: Document Viewer + Live Webcam Scanner + Auto-Crop Box */}
         <div className="glass-panel" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1110,6 +1372,7 @@ export const QrCodeStep: React.FC<QrCodeStepProps> = ({
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 };

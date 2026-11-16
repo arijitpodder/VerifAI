@@ -676,6 +676,9 @@ export async function autoCropAndScanQr(
           candidateBoxes.push(customRegion);
         }
 
+        // Yield to event loop so active burst animations render without main-thread jank
+        await new Promise((r) => setTimeout(r, 6));
+
         // Primary Auto-Detect Box from High-Frequency Tile Energy
         const autoBox = detectQrBoundingBox(sampleImgData, sampleW, sampleH);
         candidateBoxes.push(autoBox);
@@ -699,9 +702,10 @@ export async function autoCropAndScanQr(
           candidateBoxes.push(STANDARD_CROP_REGIONS.FULL_IMAGE);
         }
 
-        // 2. Iterate through candidate crops until decoded
+        // 2. Iterate through candidate crops until decoded (yielding per box to keep burst & UI 100% smooth)
         for (const box of candidateBoxes) {
           try {
+            await new Promise((r) => setTimeout(r, 8));
             const cropResult = await cropImageRegion(img, box);
 
             const { canvas: cropCanvas, ctx: cropCtx } = cropResult;

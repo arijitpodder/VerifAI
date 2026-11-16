@@ -27,12 +27,23 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ currentStep, onStepClick
 
   return (
     <div style={{ margin: '1.75rem 0 2rem 0' }}>
-      <div className="glass-panel" style={{
+      <div className="glass-panel cyber-2080-card" style={{
         padding: '1.75rem 2rem',
         background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(11, 17, 32, 0.8) 100%)',
         position: 'relative',
         overflow: 'hidden'
       }}>
+        {/* Futuristic Laser Top Scanline */}
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: '2px',
+          background: 'linear-gradient(90deg, transparent, #00f2fe, #10b981, transparent)',
+          animation: 'scanlineMove 3s linear infinite'
+        }} />
+
         {/* Glow decoration */}
         <div style={{
           position: 'absolute',

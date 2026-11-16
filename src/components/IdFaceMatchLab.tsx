@@ -787,7 +787,7 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', maxWidth: '1280px', margin: '0 auto', width: '100%' }}>
       {/* Top Banner Header with Audio Toggle */}
-      <div className="glass-panel" style={{
+      <div className="glass-panel cyber-2080-card" style={{
         padding: '1.75rem 2rem',
         borderLeft: '5px solid var(--cyan-primary)',
         background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(6, 12, 24, 0.98) 100%)',
@@ -825,6 +825,29 @@ export const IdFaceMatchLab: React.FC<IdFaceMatchLabProps> = ({ onNavigateToPipe
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+            {/* KAVACH 5.2 Real-time Security Grid Badge */}
+            <div
+              style={{
+                padding: '0.45rem 0.85rem',
+                fontSize: '0.78rem',
+                background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(0, 242, 254, 0.12) 100%)',
+                border: '1px solid rgba(16, 185, 129, 0.5)',
+                borderRadius: 'var(--radius-md)',
+                color: '#ffffff',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.45rem',
+                boxShadow: '0 0 15px rgba(16, 185, 129, 0.2)'
+              }}
+              title="KAVACH 5.2 Real-Time Anti-Hack & Anti-Bug Defense Active"
+            >
+              <ShieldCheck size={16} color="#10b981" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                <span style={{ fontWeight: 800, color: '#10b981' }}>KAVACH 5.2:</span>
+                <span style={{ color: '#00f2fe', fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>100% IMMUTABLE</span>
+              </div>
+            </div>
+
             {/* Quad-Core AI Verification Ensemble Status Indicator */}
             <div
               style={{

@@ -513,6 +513,225 @@ class SoundEffectsEngine {
   }
 
   /**
+   * 💥 2080 Quantum Particle Burst & Explosive Shatter
+   * Sub-bass transient pop + resonant filter sweep + high-frequency quantum crystal dispersal
+   */
+  public playQuantumBurst() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    try {
+      const now = ctx.currentTime;
+
+      // 1. Sub-bass implosion transient
+      const subOsc = ctx.createOscillator();
+      const subGain = ctx.createGain();
+      subOsc.type = 'sine';
+      subOsc.frequency.setValueAtTime(140, now);
+      subOsc.frequency.exponentialRampToValueAtTime(32, now + 0.18);
+
+      subGain.gain.setValueAtTime(0.28, now);
+      subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+
+      subOsc.connect(subGain);
+      subGain.connect(ctx.destination);
+      subOsc.start(now);
+      subOsc.stop(now + 0.22);
+
+      // 2. Resonant bandpass spark shatter (white noise crackle)
+      const bufferSize = Math.floor(ctx.sampleRate * 0.25);
+      const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const output = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        output[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.2));
+      }
+
+      const whiteNoise = ctx.createBufferSource();
+      whiteNoise.buffer = noiseBuffer;
+
+      const bandpass = ctx.createBiquadFilter();
+      bandpass.type = 'bandpass';
+      bandpass.frequency.setValueAtTime(3400, now);
+      bandpass.frequency.exponentialRampToValueAtTime(800, now + 0.22);
+      bandpass.Q.setValueAtTime(4.5, now);
+
+      const noiseGain = ctx.createGain();
+      noiseGain.gain.setValueAtTime(0.22, now);
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+
+      whiteNoise.connect(bandpass);
+      bandpass.connect(noiseGain);
+      noiseGain.connect(ctx.destination);
+      whiteNoise.start(now);
+
+      // 3. High-frequency crystalline harmonic shimmer
+      const shimmer = ctx.createOscillator();
+      const shimmerGain = ctx.createGain();
+      shimmer.type = 'triangle';
+      shimmer.frequency.setValueAtTime(1800, now);
+      shimmer.frequency.exponentialRampToValueAtTime(4200, now + 0.15);
+
+      shimmerGain.gain.setValueAtTime(0.08, now);
+      shimmerGain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+
+      shimmer.connect(shimmerGain);
+      shimmerGain.connect(ctx.destination);
+      shimmer.start(now);
+      shimmer.stop(now + 0.18);
+    } catch {
+      // AudioContext unavailable
+    }
+  }
+
+  /**
+   * 🛡️ KAVACH 5.2 Quantum Shield Activation Hum
+   * Resonant dual harmonic forcefield drone
+   */
+  public playKavachShieldPulse() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    try {
+      const now = ctx.currentTime;
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const filter = ctx.createBiquadFilter();
+
+      osc1.type = 'sawtooth';
+      osc2.type = 'sine';
+      osc1.frequency.setValueAtTime(220, now);
+      osc1.frequency.linearRampToValueAtTime(440, now + 0.25);
+      osc1.frequency.linearRampToValueAtTime(330, now + 0.45);
+
+      osc2.frequency.setValueAtTime(440, now);
+      osc2.frequency.linearRampToValueAtTime(880, now + 0.25);
+      osc2.frequency.linearRampToValueAtTime(660, now + 0.45);
+
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(1200, now);
+      filter.frequency.linearRampToValueAtTime(3200, now + 0.25);
+      filter.frequency.linearRampToValueAtTime(1600, now + 0.45);
+
+      gain.gain.setValueAtTime(0.001, now);
+      gain.gain.linearRampToValueAtTime(0.18, now + 0.1);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.48);
+
+      osc1.connect(filter);
+      osc2.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc1.start(now);
+      osc2.start(now);
+      osc1.stop(now + 0.5);
+      osc2.stop(now + 0.5);
+    } catch {
+      // AudioContext unavailable
+    }
+  }
+
+  /**
+   * ⚡ KAVACH Threat Neutralized Authorization Chirp
+   */
+  public playThreatNeutralized() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    try {
+      const now = ctx.currentTime;
+      [880, 1320, 1760].forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, now + i * 0.06);
+
+        gain.gain.setValueAtTime(0.12, now + i * 0.06);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.06 + 0.08);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + i * 0.06);
+        osc.stop(now + i * 0.06 + 0.09);
+      });
+    } catch {
+      // AudioContext unavailable
+    }
+  }
+
+  /**
+   * 🛡️ KAVACH 5.2 Full-Screen Quantum EMP Shield Surge
+   * Deep resonant sci-fi energy barrier wave
+   */
+  public playDefenseShieldSurge() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    try {
+      const now = ctx.currentTime;
+      const sub = ctx.createOscillator();
+      const subGain = ctx.createGain();
+      sub.type = 'sine';
+      sub.frequency.setValueAtTime(80, now);
+      sub.frequency.exponentialRampToValueAtTime(28, now + 0.45);
+
+      subGain.gain.setValueAtTime(0.35, now);
+      subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+
+      sub.connect(subGain);
+      subGain.connect(ctx.destination);
+      sub.start(now);
+      sub.stop(now + 0.52);
+
+      // Harmonic Forcefield Ring
+      const osc = ctx.createOscillator();
+      const oscGain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(440, now);
+      osc.frequency.linearRampToValueAtTime(880, now + 0.2);
+      osc.frequency.linearRampToValueAtTime(220, now + 0.45);
+
+      oscGain.gain.setValueAtTime(0.15, now);
+      oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.48);
+
+      osc.connect(oscGain);
+      oscGain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.5);
+    } catch {
+      // AudioContext unavailable
+    }
+  }
+
+  /**
+   * 🦠 KAVACH 5.2 Bug Neutralized & Self-Healing Zap
+   */
+  public playBugNeutralized() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    try {
+      const now = ctx.currentTime;
+      [1400, 700, 2100].forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(freq, now + i * 0.04);
+
+        gain.gain.setValueAtTime(0.08, now + i * 0.04);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.04 + 0.05);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + i * 0.04);
+        osc.stop(now + i * 0.04 + 0.06);
+      });
+    } catch {
+      // AudioContext unavailable
+    }
+  }
+
+  /**
    * 🇮🇳 Triumphant Indian National Flag Bugle & Brass Fanfare
    * Resonant military brass salute motif (G4 -> C5 -> E5 -> G5 -> C6) with rich harmonics
    */

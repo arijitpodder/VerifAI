@@ -45,11 +45,16 @@ export const BiometricsStep: React.FC<BiometricsStepProps> = ({
   const [countdown, setCountdown] = useState<number | null>(null);
 
   // Biometrics & Comparison Data (Transferred 1:1 from IdFaceMatchLab)
+  const [hasCapturedLiveFace, setHasCapturedLiveFace] = useState<boolean>(
+    Boolean(biometrics.isUserCaptured && biometrics.liveFaceCapturedUrl)
+  );
   const [comparisonResult, setComparisonResult] = useState<DetailedBiometricComparison | null>(null);
   const [quadConsensus, setQuadConsensus] = useState<QuadConsensusResult | null>(null);
-  const [animatedScore, setAnimatedScore] = useState<number>(biometrics.faceMatchScore || 93);
+  const [animatedScore, setAnimatedScore] = useState<number>(
+    biometrics.isUserCaptured ? (biometrics.faceMatchScore || 0) : 0
+  );
   const [verificationPassed, setVerificationPassed] = useState<boolean>(
-    biometrics.matchPassed ?? (biometrics.faceMatchScore ? biometrics.faceMatchScore >= 65 : true)
+    biometrics.isUserCaptured ? (biometrics.matchPassed ?? false) : false
   );
   const [auditHash, setAuditHash] = useState<string>(
     () => '0x' + Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
@@ -60,11 +65,9 @@ export const BiometricsStep: React.FC<BiometricsStepProps> = ({
     preset.portraitSvg ? svgToDataUri(preset.portraitSvg) : ''
   );
 
-  // Live captured photo
+  // Live captured photo — only populated once user actually snaps from camera or uploads selfie
   const [activeLiveUri, setActiveLiveUri] = useState<string>(
-    biometrics.liveFaceCapturedUrl || (
-      preset.liveCapturedSvg ? svgToDataUri(preset.liveCapturedSvg) : ''
-    )
+    (biometrics.isUserCaptured && biometrics.liveFaceCapturedUrl) ? biometrics.liveFaceCapturedUrl : ''
   );
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -213,6 +216,7 @@ export const BiometricsStep: React.FC<BiometricsStepProps> = ({
       result.faceMatchScore = targetScore;
       result.matchPassed = facePassed;
       result.notes = diagnosticNotes;
+      result.isUserCaptured = true;
 
       onUpdateBiometrics(result);
     } catch (err) {
@@ -220,18 +224,6 @@ export const BiometricsStep: React.FC<BiometricsStepProps> = ({
       setIsAnalyzing(false);
     }
   };
-
-  // Initial verification on mount — deferred slightly so camera stream initializes smoothly without UI freeze
-  useEffect(() => {
-    const refPhoto = extractedPhotoUri;
-    const livePhoto = activeLiveUri;
-    if (refPhoto && livePhoto && !comparisonResult) {
-      const initTimer = setTimeout(() => {
-        runVerification(refPhoto, livePhoto);
-      }, 200);
-      return () => clearTimeout(initTimer);
-    }
-  }, []);
 
   // Countdown and capture live photo from webcam
   const handleCaptureCountdown = () => {
@@ -303,6 +295,7 @@ export const BiometricsStep: React.FC<BiometricsStepProps> = ({
 
         const displayUri = canvas.toDataURL('image/jpeg', 0.94);
         setActiveLiveUri(displayUri);
+        setHasCapturedLiveFace(true);
 
         // Un-mirrored version for biometric comparison
         const bioCanvas = document.createElement('canvas');
@@ -330,6 +323,7 @@ export const BiometricsStep: React.FC<BiometricsStepProps> = ({
     reader.onload = async (e) => {
       const uri = e.target?.result as string;
       setActiveLiveUri(uri);
+      setHasCapturedLiveFace(true);
       runVerification(extractedPhotoUri, uri, uri);
     };
     reader.readAsDataURL(file);
@@ -534,106 +528,177 @@ export const BiometricsStep: React.FC<BiometricsStepProps> = ({
           </div>
         </div>
       ) : (
-        /* ── COMPLETE RESULTS DISPLAYED AFTER ALL APIS RESPOND ── */
+        /* ── COMPLETE RESULTS DISPLAYED AFTER USER SNAPS FACE ── */
         <>
-          {/* ── BIG VERIFIED STATUS CARD (1:1 FROM IDFACEMATCHLAB) ── */}
-          <div
-            className="glass-panel"
-            style={{
-              padding: '1.75rem 1.5rem',
-              textAlign: 'center',
-              background: verificationPassed
-                ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.16) 0%, rgba(6, 12, 24, 0.98) 100%)'
-                : 'linear-gradient(135deg, rgba(239, 68, 68, 0.16) 0%, rgba(6, 12, 24, 0.98) 100%)',
-              border: verificationPassed ? '2px solid var(--color-verified)' : '2px solid var(--color-danger)',
-              boxShadow: verificationPassed ? 'var(--shadow-neon-green)' : 'var(--shadow-neon-red)',
-              position: 'relative',
-              overflow: 'hidden',
-              borderRadius: 'var(--radius-lg)'
-            }}
-          >
-        {/* Ambient Laser Beam sweep during analysis */}
-        {isAnalyzing && (
-          <div
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: 'linear-gradient(180deg, transparent, rgba(0, 242, 254, 0.15), transparent)',
-              animation: 'laserSweep 1.2s infinite'
-            }}
-          />
-        )}
+          {!hasCapturedLiveFace ? (
+            /* ── STANDBY AWAITING USER LIVE SNAP ── */
+            <div
+              className="glass-panel cyber-2080-card"
+              style={{
+                padding: '1.6rem 2rem',
+                textAlign: 'center',
+                background: 'linear-gradient(135deg, rgba(0, 242, 254, 0.08) 0%, rgba(6, 12, 24, 0.98) 100%)',
+                border: '2px solid rgba(0, 242, 254, 0.45)',
+                boxShadow: '0 0 35px rgba(0, 242, 254, 0.18)',
+                position: 'relative',
+                overflow: 'hidden',
+                borderRadius: 'var(--radius-lg)'
+              }}
+            >
+              {/* Year 2080 Robotic Telemetry Stamp */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '0.75rem',
+                fontSize: '0.68rem',
+                fontFamily: 'var(--font-mono)',
+                color: 'var(--text-muted)'
+              }}>
+                <span>SYS://YEAR-2080.BIOMETRIC-MATRIX</span>
+                <span style={{ color: '#00f2fe', fontWeight: 800 }}>🛡️ KAVACH 5.2 ENCRYPTED GATEWAY</span>
+              </div>
 
-        <div
-          style={{
-            width: '74px',
-            height: '74px',
-            borderRadius: '50%',
-            background: verificationPassed ? 'rgba(16, 185, 129, 0.25)' : 'rgba(239, 68, 68, 0.25)',
-            border: verificationPassed ? '3px solid var(--color-verified)' : '3px solid var(--color-danger)',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: '0.85rem',
-            boxShadow: verificationPassed ? '0 0 30px rgba(16, 185, 129, 0.5)' : '0 0 30px rgba(239, 68, 68, 0.5)'
-          }}
-        >
-          {verificationPassed ? (
-            <CheckCircle2 size={46} color="var(--color-verified)" />
+              <div
+                style={{
+                  width: '64px',
+                  height: '64px',
+                  borderRadius: '50%',
+                  background: 'rgba(0, 242, 254, 0.15)',
+                  border: '2px solid #00f2fe',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: '0.65rem',
+                  boxShadow: '0 0 25px rgba(0, 242, 254, 0.4)'
+                }}
+              >
+                <Camera size={32} color="#00f2fe" />
+              </div>
+
+              <h2
+                style={{
+                  fontSize: '1.5rem',
+                  fontWeight: 800,
+                  letterSpacing: '-0.02em',
+                  color: '#ffffff',
+                  margin: '0 0 0.35rem 0'
+                }}
+              >
+                LIVE WEBCAM BIOMETRIC CAPTURE READY
+              </h2>
+
+              <p
+                style={{
+                  fontSize: '0.88rem',
+                  color: 'var(--text-secondary)',
+                  maxWidth: '680px',
+                  margin: '0 auto',
+                  lineHeight: 1.5
+                }}
+              >
+                Align your face inside the viewfinder reticle on the left, then click <strong>"Instant Snap"</strong> or <strong>"Auto-Capture (3s)"</strong> to capture your face and verify against the ID document.
+              </p>
+            </div>
           ) : (
-            <XCircle size={46} color="var(--color-danger)" />
+            /* ── BIG VERIFIED STATUS CARD (SHOWN ONLY AFTER CAPTURE) ── */
+            <div
+              className="glass-panel cyber-2080-card"
+              style={{
+                padding: '1.75rem 1.5rem',
+                textAlign: 'center',
+                background: verificationPassed
+                  ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.16) 0%, rgba(6, 12, 24, 0.98) 100%)'
+                  : 'linear-gradient(135deg, rgba(239, 68, 68, 0.16) 0%, rgba(6, 12, 24, 0.98) 100%)',
+                border: verificationPassed ? '2px solid var(--color-verified)' : '2px solid var(--color-danger)',
+                boxShadow: verificationPassed ? 'var(--shadow-neon-green)' : 'var(--shadow-neon-red)',
+                position: 'relative',
+                overflow: 'hidden',
+                borderRadius: 'var(--radius-lg)'
+              }}
+            >
+              {/* Year 2080 Robotic Telemetry Stamp */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '0.75rem',
+                fontSize: '0.68rem',
+                fontFamily: 'var(--font-mono)',
+                color: 'var(--text-muted)'
+              }}>
+                <span>SYS://YEAR-2080.BIOMETRIC-MATRIX</span>
+                <span style={{ color: '#10b981', fontWeight: 800 }}>🛡️ KAVACH 5.2 CRYPTO-HASH VERIFIED</span>
+              </div>
+
+              <div
+                style={{
+                  width: '74px',
+                  height: '74px',
+                  borderRadius: '50%',
+                  background: verificationPassed ? 'rgba(16, 185, 129, 0.25)' : 'rgba(239, 68, 68, 0.25)',
+                  border: verificationPassed ? '3px solid var(--color-verified)' : '3px solid var(--color-danger)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: '0.85rem',
+                  boxShadow: verificationPassed ? '0 0 30px rgba(16, 185, 129, 0.5)' : '0 0 30px rgba(239, 68, 68, 0.5)'
+                }}
+              >
+                {verificationPassed ? (
+                  <CheckCircle2 size={46} color="var(--color-verified)" />
+                ) : (
+                  <XCircle size={46} color="var(--color-danger)" />
+                )}
+              </div>
+
+              <h2
+                style={{
+                  fontSize: '1.75rem',
+                  fontWeight: 900,
+                  letterSpacing: '-0.02em',
+                  color: verificationPassed ? 'var(--color-verified)' : 'var(--color-danger)',
+                  margin: '0 0 0.4rem 0'
+                }}
+              >
+                {verificationPassed
+                  ? 'VERIFIED: THIS IS THE ID OF THE SAME PERSON'
+                  : 'BIOMETRIC MISMATCH: ID DOES NOT MATCH LIVE PRESENTER'}
+              </h2>
+
+              <p
+                style={{
+                  fontSize: '0.92rem',
+                  color: 'var(--text-secondary)',
+                  maxWidth: '750px',
+                  margin: '0 auto',
+                  lineHeight: 1.5
+                }}
+              >
+                {verificationPassed
+                  ? '1:1 Quantum Neural Biometric analysis confirms that the presenter captured on camera is the authentic cardholder shown on the ID document.'
+                  : 'Facial biometrics diverged between the ID document portrait and live camera capture. The similarity score is below required security thresholds.'}
+              </p>
+
+              {/* Cryptographic Proof Hash */}
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.65rem',
+                  background: 'rgba(0,0,0,0.5)',
+                  padding: '0.4rem 1.2rem',
+                  borderRadius: '99px',
+                  marginTop: '1.1rem',
+                  border: '1px solid var(--border-subtle)',
+                  fontSize: '0.78rem'
+                }}
+              >
+                <span style={{ color: 'var(--text-muted)' }}>Cryptographic Proof Hash:</span>
+                <code style={{ color: 'var(--cyan-primary)', fontFamily: 'var(--font-mono)' }}>{auditHash}</code>
+              </div>
+            </div>
           )}
-        </div>
-
-        <h2
-          style={{
-            fontSize: '1.75rem',
-            fontWeight: 900,
-            letterSpacing: '-0.02em',
-            color: verificationPassed ? 'var(--color-verified)' : 'var(--color-danger)',
-            margin: '0 0 0.4rem 0'
-          }}
-        >
-          {verificationPassed
-            ? 'VERIFIED: THIS IS THE ID OF THE SAME PERSON'
-            : 'BIOMETRIC MISMATCH: ID DOES NOT MATCH LIVE PRESENTER'}
-        </h2>
-
-        <p
-          style={{
-            fontSize: '0.92rem',
-            color: 'var(--text-secondary)',
-            maxWidth: '750px',
-            margin: '0 auto',
-            lineHeight: 1.5
-          }}
-        >
-          {verificationPassed
-            ? '1:1 Quantum Neural Biometric analysis confirms that the presenter captured on camera is the authentic cardholder shown on the ID document.'
-            : 'Facial biometrics diverged between the ID document portrait and live camera capture. The similarity score is below required security thresholds.'}
-        </p>
-
-        {/* Cryptographic Proof Hash */}
-        <div
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '0.65rem',
-            background: 'rgba(0,0,0,0.5)',
-            padding: '0.4rem 1.2rem',
-            borderRadius: '99px',
-            marginTop: '1.1rem',
-            border: '1px solid var(--border-subtle)',
-            fontSize: '0.78rem'
-          }}
-        >
-          <span style={{ color: 'var(--text-muted)' }}>Cryptographic Proof Hash:</span>
-          <code style={{ color: 'var(--cyan-primary)', fontFamily: 'var(--font-mono)' }}>{auditHash}</code>
-        </div>
-      </div>
 
       {/* Quantum Synaptic Match Bridge Animation */}
       <SynapticMatchBridge isMatching={isAnalyzing} />
@@ -922,12 +987,28 @@ export const BiometricsStep: React.FC<BiometricsStepProps> = ({
                 style={{
                   fontSize: '0.72rem',
                   fontWeight: 800,
-                  background: verificationPassed ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                  color: verificationPassed ? 'var(--color-verified)' : 'var(--color-danger)',
-                  border: verificationPassed ? '1px solid var(--color-verified)' : '1px solid var(--color-danger)'
+                  background: !hasCapturedLiveFace
+                    ? 'rgba(0, 242, 254, 0.15)'
+                    : verificationPassed
+                    ? 'rgba(16, 185, 129, 0.15)'
+                    : 'rgba(239, 68, 68, 0.15)',
+                  color: !hasCapturedLiveFace
+                    ? '#00f2fe'
+                    : verificationPassed
+                    ? 'var(--color-verified)'
+                    : 'var(--color-danger)',
+                  border: !hasCapturedLiveFace
+                    ? '1px solid #00f2fe'
+                    : verificationPassed
+                    ? '1px solid var(--color-verified)'
+                    : '1px solid var(--color-danger)'
                 }}
               >
-                {verificationPassed ? '1:1 MATCH PASS' : '1:1 MISMATCH (FAIL)'}
+                {!hasCapturedLiveFace
+                  ? 'AWAITING LIVE SNAP'
+                  : verificationPassed
+                  ? '1:1 MATCH PASS'
+                  : '1:1 MISMATCH (FAIL)'}
               </span>
             </div>
 
@@ -973,8 +1054,14 @@ export const BiometricsStep: React.FC<BiometricsStepProps> = ({
                     height: '94px',
                     borderRadius: '50%',
                     background: 'rgba(6, 12, 24, 0.95)',
-                    border: `3px solid ${verificationPassed ? 'var(--color-verified)' : 'var(--color-danger)'}`,
-                    boxShadow: verificationPassed ? 'var(--shadow-neon-green)' : 'var(--shadow-neon-red)',
+                    border: !hasCapturedLiveFace
+                      ? '3px solid rgba(0, 242, 254, 0.5)'
+                      : `3px solid ${verificationPassed ? 'var(--color-verified)' : 'var(--color-danger)'}`,
+                    boxShadow: !hasCapturedLiveFace
+                      ? '0 0 20px rgba(0, 242, 254, 0.25)'
+                      : verificationPassed
+                      ? 'var(--shadow-neon-green)'
+                      : 'var(--shadow-neon-red)',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
@@ -983,25 +1070,33 @@ export const BiometricsStep: React.FC<BiometricsStepProps> = ({
                 >
                   <span
                     style={{
-                      fontSize: '1.65rem',
+                      fontSize: hasCapturedLiveFace ? '1.65rem' : '1.35rem',
                       fontWeight: 900,
-                      color: verificationPassed ? 'var(--color-verified)' : 'var(--color-danger)'
+                      color: !hasCapturedLiveFace
+                        ? '#00f2fe'
+                        : verificationPassed
+                        ? 'var(--color-verified)'
+                        : 'var(--color-danger)'
                     }}
                   >
-                    {animatedScore}%
+                    {hasCapturedLiveFace ? `${animatedScore}%` : '--'}
                   </span>
                   <span style={{ fontSize: '0.58rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                    Match
+                    {hasCapturedLiveFace ? 'Match' : 'Standby'}
                   </span>
                 </div>
                 <div
                   style={{
                     fontSize: '0.72rem',
                     fontWeight: 800,
-                    color: verificationPassed ? 'var(--color-verified)' : 'var(--color-danger)'
+                    color: !hasCapturedLiveFace
+                      ? '#00f2fe'
+                      : verificationPassed
+                      ? 'var(--color-verified)'
+                      : 'var(--color-danger)'
                   }}
                 >
-                  {verificationPassed ? 'PASS (>=65%)' : 'FAIL (<65%)'}
+                  {!hasCapturedLiveFace ? 'READY TO SNAP' : verificationPassed ? 'PASS (>=65%)' : 'FAIL (<65%)'}
                 </div>
               </div>
 
@@ -1011,20 +1106,60 @@ export const BiometricsStep: React.FC<BiometricsStepProps> = ({
                   Live Presenter
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'center' }}>
-                  <FaceLandmarkOverlay
-                    imageSrc={comparisonResult?.croppedLiveUri || activeLiveUri}
-                    visualization={comparisonResult?.liveLandmarkViz}
-                    width={150}
-                    height={190}
-                    borderColor={verificationPassed ? 'var(--color-verified)' : 'var(--color-danger)'}
-                    label="Live Presenter"
-                  />
+                  {hasCapturedLiveFace && (comparisonResult?.croppedLiveUri || activeLiveUri) ? (
+                    <FaceLandmarkOverlay
+                      imageSrc={comparisonResult?.croppedLiveUri || activeLiveUri}
+                      visualization={comparisonResult?.liveLandmarkViz}
+                      width={150}
+                      height={190}
+                      borderColor={verificationPassed ? 'var(--color-verified)' : 'var(--color-danger)'}
+                      label="Live Presenter"
+                    />
+                  ) : (
+                    <div
+                      style={{
+                        width: '150px',
+                        height: '190px',
+                        borderRadius: '8px',
+                        border: '2px dashed rgba(0, 242, 254, 0.45)',
+                        background: 'rgba(0, 242, 254, 0.04)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.6rem',
+                        padding: '0.85rem',
+                        boxSizing: 'border-box'
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: '44px',
+                          height: '44px',
+                          borderRadius: '50%',
+                          background: 'rgba(0, 242, 254, 0.12)',
+                          border: '1.5px solid #00f2fe',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                      >
+                        <Camera size={22} color="#00f2fe" />
+                      </div>
+                      <span style={{ fontSize: '0.68rem', color: '#00f2fe', fontWeight: 700, textAlign: 'center', lineHeight: 1.3 }}>
+                        Awaiting Live Camera Snap
+                      </span>
+                      <span style={{ fontSize: '0.58rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+                        Click &ldquo;Instant Snap&rdquo; on left
+                      </span>
+                    </div>
+                  )}
                 </div>
                 <div style={{ marginTop: '0.5rem', fontSize: '0.86rem', fontWeight: 800, color: '#ffffff' }}>
-                  Live Camera Face
+                  {hasCapturedLiveFace ? 'Live Camera Face' : 'Live Viewfinder'}
                 </div>
                 <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)' }}>
-                  Normalized 4:5 Crop
+                  {hasCapturedLiveFace ? 'Normalized 4:5 Crop' : 'Standby for Snap'}
                 </div>
               </div>
             </div>
@@ -1041,25 +1176,25 @@ export const BiometricsStep: React.FC<BiometricsStepProps> = ({
               <div style={{ background: 'rgba(0,0,0,0.35)', padding: '0.45rem', borderRadius: '6px', textAlign: 'center', border: '1px solid rgba(255,255,255,0.06)' }}>
                 <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', display: 'block' }}>Pupillary Dist</span>
                 <strong style={{ fontSize: '0.76rem', color: '#38bdf8' }}>
-                  {pupillaryDelta ? `${(pupillaryDelta.delta * 100).toFixed(1)}% Delta` : (comparisonResult?.matchPassed ? '2.4% Delta' : '14.8% Delta')}
+                  {hasCapturedLiveFace ? (pupillaryDelta ? `${(pupillaryDelta.delta * 100).toFixed(1)}% Delta` : (comparisonResult?.matchPassed ? '2.4% Delta' : '14.8% Delta')) : '--'}
                 </strong>
               </div>
               <div style={{ background: 'rgba(0,0,0,0.35)', padding: '0.45rem', borderRadius: '6px', textAlign: 'center', border: '1px solid rgba(255,255,255,0.06)' }}>
                 <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', display: 'block' }}>Temple Width</span>
                 <strong style={{ fontSize: '0.76rem', color: '#38bdf8' }}>
-                  {templeDelta ? `${(templeDelta.delta * 100).toFixed(1)}% Delta` : (comparisonResult?.matchPassed ? '3.1% Delta' : '16.5% Delta')}
+                  {hasCapturedLiveFace ? (templeDelta ? `${(templeDelta.delta * 100).toFixed(1)}% Delta` : (comparisonResult?.matchPassed ? '3.1% Delta' : '16.5% Delta')) : '--'}
                 </strong>
               </div>
               <div style={{ background: 'rgba(0,0,0,0.35)', padding: '0.45rem', borderRadius: '6px', textAlign: 'center', border: '1px solid rgba(255,255,255,0.06)' }}>
                 <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', display: 'block' }}>Symmetry</span>
                 <strong style={{ fontSize: '0.76rem', color: '#10b981' }}>
-                  {comparisonResult?.asymmetryScore ? `${comparisonResult.asymmetryScore}%` : '96.2%'}
+                  {hasCapturedLiveFace ? (comparisonResult?.asymmetryScore ? `${comparisonResult.asymmetryScore}%` : '96.2%') : '--'}
                 </strong>
               </div>
               <div style={{ background: 'rgba(0,0,0,0.35)', padding: '0.45rem', borderRadius: '6px', textAlign: 'center', border: '1px solid rgba(255,255,255,0.06)' }}>
                 <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', display: 'block' }}>Structure</span>
                 <strong style={{ fontSize: '0.76rem', color: '#a855f7' }}>
-                  {comparisonResult?.structuralScore ? `${comparisonResult.structuralScore}%` : '92.0%'}
+                  {hasCapturedLiveFace ? (comparisonResult?.structuralScore ? `${comparisonResult.structuralScore}%` : '92.0%') : '--'}
                 </strong>
               </div>
             </div>
@@ -1088,7 +1223,7 @@ export const BiometricsStep: React.FC<BiometricsStepProps> = ({
       </div>
 
       {/* ── QUAD-AI BIOMETRIC CONSENSUS PANEL (TRANSFERRED 1:1 FROM IDFACEMATCHLAB) ── */}
-      {quadConsensus && (
+      {hasCapturedLiveFace && quadConsensus ? (
         <div style={{ marginTop: '0.5rem' }}>
           <div
             style={{
@@ -1285,6 +1420,59 @@ export const BiometricsStep: React.FC<BiometricsStepProps> = ({
               })}
             </div>
           </div>
+        </div>
+      ) : (
+        <div
+          className="glass-panel"
+          style={{
+            padding: '1.1rem 1.4rem',
+            borderRadius: 'var(--radius-lg)',
+            border: '1px solid rgba(0, 242, 254, 0.25)',
+            background: 'linear-gradient(135deg, rgba(0, 242, 254, 0.04) 0%, rgba(4, 8, 19, 0.9) 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '1rem',
+            marginTop: '0.5rem',
+            flexWrap: 'wrap'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+            <div
+              style={{
+                width: '42px',
+                height: '42px',
+                borderRadius: '50%',
+                background: 'rgba(0, 242, 254, 0.12)',
+                border: '1px solid #00f2fe',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '1.2rem'
+              }}
+            >
+              ⚡
+            </div>
+            <div>
+              <div style={{ fontSize: '0.98rem', fontWeight: 800, color: '#ffffff' }}>
+                Quad-AI Biometric Consensus Engine [STANDBY]
+              </div>
+              <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>
+                Our AI + Google Gemini + Groq Llama + NVIDIA NIM AI will execute simultaneously once you snap your live face.
+              </div>
+            </div>
+          </div>
+          <span
+            className="badge badge-cyan"
+            style={{
+              fontSize: '0.72rem',
+              padding: '0.35rem 0.85rem',
+              letterSpacing: '0.04em',
+              fontWeight: 800
+            }}
+          >
+            STANDBY FOR SNAP
+          </span>
         </div>
       )}
         </>

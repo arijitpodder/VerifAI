@@ -38,6 +38,8 @@ import { IdFaceMatchLab } from './components/IdFaceMatchLab';
 import { HiggsfieldMotionCanvas } from './components/HiggsfieldMotionCanvas';
 import type { CanvasMode } from './components/HiggsfieldMotionCanvas';
 import { CyberBootIntro } from './components/CyberBootIntro';
+import { QuantumBurstOverlay } from './components/QuantumBurstOverlay';
+import { KavachSecurityModal } from './components/KavachSecurityModal';
 import { X, Cpu } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -83,8 +85,8 @@ export const App: React.FC = () => {
     notes: 'State Department PKD Registry match confirmed. Valid cryptographic signature.',
     databaseJurisdiction: 'United States Department of State'
   });
-  const [biometrics, setBiometrics] = useState<BiometricCheckResult>(
-    evaluateBiometrics(
+  const [biometrics, setBiometrics] = useState<BiometricCheckResult>(() => {
+    const res = evaluateBiometrics(
       SAMPLE_DOCUMENTS[0].biometricsPreset.matchScore,
       true,
       ['Face Framing', 'Blink Detection', 'Frame Liveness'],
@@ -92,8 +94,10 @@ export const App: React.FC = () => {
       SAMPLE_DOCUMENTS[0].liveCapturedSvg,
       SAMPLE_DOCUMENTS[0].biometricsPreset.notes,
       true
-    )
-  );
+    );
+    res.isUserCaptured = false;
+    return res;
+  });
   const [riskBreakdown, setRiskBreakdown] = useState<RiskScoreBreakdown>(
     evaluateOverallRisk(
       validateConsistency(SAMPLE_DOCUMENTS[0].extractedFields),
@@ -135,6 +139,7 @@ export const App: React.FC = () => {
   const [isCertificateModalOpen, setIsCertificateModalOpen] = useState<boolean>(false);
   const [isArchitectureModalOpen, setIsArchitectureModalOpen] = useState<boolean>(false);
   const [isAuditLogModalOpen, setIsAuditLogModalOpen] = useState<boolean>(false);
+  const [isKavachModalOpen, setIsKavachModalOpen] = useState<boolean>(false);
 
   // Audit history list
   const [auditLogs, setAuditLogs] = useState<AuditRecord[]>([]);
@@ -191,6 +196,7 @@ export const App: React.FC = () => {
       preset.biometricsPreset.faceDiscrepancy || comparison.diagnosticExplanation,
       true
     );
+    bioRes.isUserCaptured = false;
     setBiometrics(bioRes);
 
     // 5. Overall Risk
@@ -280,19 +286,19 @@ export const App: React.FC = () => {
         );
         setAuthority(authorityRes);
 
-        // 4. Authentically compare the cropped document portrait against live face (fast offline comparison during document ingestion)
-        const liveFaceRef = biometrics.liveFaceCapturedUrl || portraitCrop;
-        const comparison = await computeAuthenticFaceSimilarity(portraitCrop, liveFaceRef, 'KYC_STANDARD', true);
+        // 4. Extract cardholder biometric portrait from uploaded credential (awaiting live webcam capture in Step 6)
         const bioRes = evaluateBiometrics(
-          biometrics.liveFaceCapturedUrl ? comparison.similarityScore : 96.4,
+          96.4,
           true,
           ['Facial Frame Alignment', 'Active Landmark Analysis', 'Document Portrait Extraction'],
           portraitCrop,
-          biometrics.liveFaceCapturedUrl || undefined,
-          comparison.diagnosticExplanation || 'Cardholder biometric portrait successfully extracted and locked from credential.',
+          undefined,
+          'Cardholder biometric portrait successfully extracted and locked from credential.',
           false
         );
         bioRes.docFaceCroppedUrl = portraitCrop;
+        bioRes.liveFaceCapturedUrl = undefined;
+        bioRes.isUserCaptured = false;
         setBiometrics(bioRes);
 
         // 5. Create a dynamic custom preset object representing this uploaded document so downstream steps stay in sync
@@ -319,9 +325,9 @@ export const App: React.FC = () => {
             notes: authorityRes.notes
           },
           biometricsPreset: {
-            matchScore: comparison.similarityScore || 96.4,
+            matchScore: 96.4,
             notes: 'Active portrait cropped and locked from identity document.',
-            faceDiscrepancy: comparison.diagnosticExplanation || 'Optimal facial landmark match.'
+            faceDiscrepancy: 'Optimal facial landmark match.'
           }
         };
         setSelectedPreset(customPreset);
@@ -406,7 +412,8 @@ export const App: React.FC = () => {
         false
       );
       bioRes.docFaceCroppedUrl = portraitCrop;
-      setBiometrics(bioRes);
+      bioRes.isUserCaptured = false;
+    setBiometrics(bioRes);
 
       const customPreset: PresetSample = {
         id: 'custom-rotated-' + Date.now(),
@@ -531,6 +538,9 @@ export const App: React.FC = () => {
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+      {/* 2080 Quantum Particle Burst & Explosive Shatter Canvas Overlay */}
+      <QuantumBurstOverlay />
+
       {/* Hyper-Futuristic Generative Motion Canvas */}
       <HiggsfieldMotionCanvas mode={motionMode} paused={showBootIntro} />
 
@@ -543,6 +553,7 @@ export const App: React.FC = () => {
       <Navbar
         onOpenArchitecture={() => setIsArchitectureModalOpen(true)}
         onOpenAuditLog={() => setIsAuditLogModalOpen(true)}
+        onOpenKavach={() => setIsKavachModalOpen(true)}
         auditCount={auditLogs.length}
         activeMode={appMode}
         onChangeMode={(m) => setAppMode(m)}
@@ -697,7 +708,8 @@ export const App: React.FC = () => {
             initialLivePhotoUri={svgToDataUri(selectedPreset.liveCapturedSvg)}
             initialPreset={selectedPreset}
             onSyncBiometrics={(bioRes) => {
-              setBiometrics(bioRes);
+              bioRes.isUserCaptured = false;
+    setBiometrics(bioRes);
               const updatedRisk = evaluateOverallRisk(consistency, forensics, authority, bioRes);
               setRiskBreakdown(updatedRisk);
             }}
@@ -874,6 +886,11 @@ export const App: React.FC = () => {
           logs={auditLogs}
           onClose={() => setIsAuditLogModalOpen(false)}
         />
+      )}
+
+      {/* KAVACH 5.2 Autonomous AI Cyber Defense Control Center Modal */}
+      {isKavachModalOpen && (
+        <KavachSecurityModal onClose={() => setIsKavachModalOpen(false)} />
       )}
 
       {/* Footer */}

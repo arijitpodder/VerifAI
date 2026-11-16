@@ -82,6 +82,7 @@ export interface BiometricCheckResult {
   score: number; // 0-100 combined
   notes: string;
   isSimulated?: boolean;
+  isUserCaptured?: boolean;
 }
 
 export type RiskClassification = 'VERIFIED' | 'REVIEW_REQUIRED' | 'HIGH_RISK';
