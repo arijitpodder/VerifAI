@@ -182,14 +182,6 @@ async function getBase64Data(imageSrc: string): Promise<{ base64: string; mimeTy
     cleanSrc = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(cleanSrc);
   }
 
-  // If already a standard raster data URI (jpeg or png), extract directly
-  if (cleanSrc.startsWith('data:image/jpeg') || cleanSrc.startsWith('data:image/png')) {
-    const matches = cleanSrc.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
-    if (matches && matches[2].length > 100) {
-      return { mimeType: matches[1], base64: matches[2] };
-    }
-  }
-
   return new Promise((resolve, reject) => {
     const timeoutId = setTimeout(() => {
       // If we already have a data URI of any sort, fallback to it on timeout
@@ -207,9 +199,9 @@ async function getBase64Data(imageSrc: string): Promise<{ base64: string; mimeTy
 
     img.onload = () => {
       clearTimeout(timeoutId);
-      const maxDim = 384; // Optimized for vision token limits and fast processing
-      let w = img.naturalWidth || img.width || 240;
-      let h = img.naturalHeight || img.height || 300;
+      const maxDim = 256; // Optimal for rapid multimodal vision inference and strict token budget
+      let w = img.naturalWidth || img.width || 200;
+      let h = img.naturalHeight || img.height || 250;
 
       // Ensure minimum 64x64 dimension required by vision architectures
       if (w < 64) w = 64;
@@ -236,7 +228,7 @@ async function getBase64Data(imageSrc: string): Promise<{ base64: string; mimeTy
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.80);
       const b64 = dataUrl.split(',')[1];
       resolve({ mimeType: 'image/jpeg', base64: b64 });
     };
@@ -293,26 +285,29 @@ function buildBiometricPrompt(telemetry?: {
   const sym = telemetry ? (100 - telemetry.symmetryDelta).toFixed(1) : undefined;
   const struct = telemetry ? telemetry.structureDelta.toFixed(1) : undefined;
 
-  const telemetrySection = (pd && temple && sym && struct)
-    ? `Objective 2D/3D sensor telemetry measured by local landmark tracking:
+  const telemetryHint = (pd && temple && sym && struct)
+    ? `Biometric Reference Telemetry (478-point landmark tracker):
 - Inter-pupillary distance delta: ${pd}%
 - Cranial / temple breadth delta: ${temple}%
 - Bilateral facial symmetry index: ${sym}%
 - Surface mesh structural divergence: ${struct}%`
     : `Perform independent visual biometric landmark analysis.`;
 
-  return `You are an expert forensic computer vision biometric examiner conducting rigorous 1:1 facial verification.
-Examine Image 1 (Enrolled ID Credential) and Image 2 (Live Presenter / Camera Feed).
+  return `You are an expert forensic facial verification computer vision examiner.
+Carefully compare the human face in Image 1 (Enrolled ID Photo) with the human face in Image 2 (Live Presenter Camera Feed).
 
-${telemetrySection}
+${telemetryHint}
 
-INSTRUCTIONS FOR RIGOROUS AUTHENTIC VERIFICATION:
-1. Examine key facial landmarks: inter-ocular canthi, nasal bridge slope, philtrum, oral commissures, jawline contour, and ear position.
-2. Account for realistic camera factors: slight head pose angle, facial expressions, lens focal distortion, lighting variation, glasses, or grooming changes.
-3. However, if the two faces have fundamentally different cranial bone structure, eye shape, nose morphology, or facial identity (i.e. different human beings), you MUST identify them as DIFFERENT persons.
-4. Output your genuine, authentic evaluation without bias. DO NOT assume they are the same person unless the facial bone structure and features genuinely match.
-5. If they ARE the same person: set isSamePerson to true, and assign confidenceScore reflecting genuine morphological match quality (e.g. 68-98).
-6. If they are DIFFERENT people: set isSamePerson to false, and assign confidenceScore reflecting low similarity (e.g. 5-35).
+CRITICAL FORENSIC VERIFICATION INSTRUCTIONS:
+1. Conduct an honest, authentic visual comparison of the two faces:
+   - Cranial bone geometry: jawline contour, mandibular angle, chin shape, cheekbone width.
+   - Ocular features: eye shape, inter-ocular spacing, eyelid creases, eyebrow arch.
+   - Nasal architecture: nose bridge width, nasal tip slope, nostril flare.
+   - Oral features: mouth width, upper/lower lip ratio, philtrum.
+2. Determine if Image 1 and Image 2 show the EXACT SAME person or TWO DIFFERENT people:
+   - If they are DIFFERENT people (or if faces diverge significantly): you MUST set "isSamePerson": false, "confidenceScore": between 8 and 38, "verdict": "DIVERGENCE_MISMATCH", and in "reasoning" explicitly describe the differing facial features you observed.
+   - If they are the SAME person: you MUST set "isSamePerson": true, "confidenceScore": between 72 and 98, "verdict": "HIGH_MATCH", and in "reasoning" explicitly describe the matching facial landmarks you observed.
+3. DO NOT output pre-baked, generic, or fake responses. Your verdict and reasoning MUST reflect what is actually visible in the two images.
 
 Return strictly valid JSON with keys:
 {
@@ -440,8 +435,7 @@ export async function verifyWithGeminiVision(
 
     const candidateModels = [
       'gemini-3.5-flash-lite',
-      'gemini-flash-lite-latest',
-      'gemini-3.5-flash'
+      'gemini-flash-lite-latest'
     ];
     const promptText = buildBiometricPrompt(compMetrics);
 
@@ -456,9 +450,11 @@ export async function verifyWithGeminiVision(
             contents: [
               {
                 parts: [
-                  { text: promptText },
+                  { text: 'IMAGE 1 (Reference ID Cardholder Photo):' },
                   { inline_data: { mime_type: imgA.mimeType, data: imgA.base64 } },
-                  { inline_data: { mime_type: imgB.mimeType, data: imgB.base64 } }
+                  { text: 'IMAGE 2 (Live Presenter Camera Feed):' },
+                  { inline_data: { mime_type: imgB.mimeType, data: imgB.base64 } },
+                  { text: promptText }
                 ]
               }
             ],
@@ -468,36 +464,12 @@ export async function verifyWithGeminiVision(
             }
           };
 
-          let response: Response;
-          try {
-            response = await fetch(endpoint, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload),
-              signal: AbortSignal.timeout(12000)
-            });
-          } catch {
-            // If multimodal inline_data vision timed out or failed, try dense biometric telemetry prompt
-            const textPayload = {
-              contents: [
-                {
-                  parts: [
-                    { text: promptText }
-                  ]
-                }
-              ],
-              generationConfig: {
-                temperature: 0.1,
-                responseMimeType: 'application/json'
-              }
-            };
-            response = await fetch(endpoint, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(textPayload),
-              signal: AbortSignal.timeout(10000)
-            });
-          }
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            signal: AbortSignal.timeout(14000)
+          });
 
           const latencyMs = Math.round(performance.now() - startTime);
           liveTelemetry.httpStatus = response.status;
@@ -639,14 +611,16 @@ export async function verifyWithGroqVision(
             {
               role: 'user',
               content: [
-                { type: 'text', text: promptText },
+                { type: 'text', text: 'IMAGE 1 (Reference ID Cardholder Photo):' },
                 { type: 'image_url', image_url: { url: `data:${imgA.mimeType};base64,${imgA.base64}` } },
-                { type: 'image_url', image_url: { url: `data:${imgB.mimeType};base64,${imgB.base64}` } }
+                { type: 'text', text: 'IMAGE 2 (Live Presenter Camera Feed):' },
+                { type: 'image_url', image_url: { url: `data:${imgB.mimeType};base64,${imgB.base64}` } },
+                { type: 'text', text: promptText }
               ]
             }
           ],
           response_format: { type: 'json_object' },
-          max_tokens: 600,
+          max_tokens: 1500,
           temperature: 0.1
         };
 
@@ -738,7 +712,7 @@ export async function verifyWithGroqVision(
             }
           ],
           response_format: { type: 'json_object' },
-          max_tokens: 500,
+          max_tokens: 1500,
           temperature: 0.1
         };
 
@@ -1174,11 +1148,15 @@ export async function runQuadConsensusVerification(
     structureDelta: Math.max(2.0, Number((100 - comp.structuralScore).toFixed(1)))
   };
 
+  // Use cropped face images when available for high-precision facial feature comparison
+  const actualRefUri = comp.croppedRefUri || refPhotoUri;
+  const actualLiveUri = comp.croppedLiveUri || livePhotoUri;
+
   // Run all 4 models simultaneously
   const [ourAi, gemini, groq, chatGpt] = await Promise.all([
     verifyWithOurAi(refPhotoUri, livePhotoUri, comp),
-    verifyWithGeminiVision(refPhotoUri, livePhotoUri, geminiKey, metrics),
-    verifyWithGroqVision(refPhotoUri, livePhotoUri, groqKey, metrics),
+    verifyWithGeminiVision(actualRefUri, actualLiveUri, geminiKey, metrics),
+    verifyWithGroqVision(actualRefUri, actualLiveUri, groqKey, metrics),
     verifyWithOpenAIVision(refPhotoUri, livePhotoUri, openaiKey, metrics)
   ]);
 
